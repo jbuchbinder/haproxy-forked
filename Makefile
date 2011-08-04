@@ -24,6 +24,7 @@
 #   USE_CRYPT_H          : set it if your system requires including crypt.h
 #   USE_VSYSCALL         : enable vsyscall on Linux x86, bypassing libc
 #   USE_GETADDRINFO      : use getaddrinfo() to resolve IPv6 host names.
+#   USE_API              : enable API specific code
 #
 # Options can be forced by specifying "USE_xxx=1" or can be disabled by using
 # "USE_xxx=" (empty string).
@@ -334,6 +335,10 @@ ifneq ($(USE_CTTPROXY),)
 OPTIONS_CFLAGS += -DCONFIG_HAP_CTTPROXY
 OPTIONS_OBJS   += src/cttproxy.o
 BUILD_OPTIONS  += $(call ignore_implicit,USE_CTTPROXY)
+endif
+
+ifneq ($(USE_API),)
+OPTIONS_CFLAGS += -DUSE_API
 endif
 
 ifneq ($(USE_TPROXY),)

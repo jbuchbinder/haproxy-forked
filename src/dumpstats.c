@@ -316,6 +316,16 @@ static int stats_parse_global(char **args, int section_type, struct proxy *curpx
 	return 0;
 }
 
+#ifdef USE_API
+static int api_call(struct stream_interface *si, struct chunk *msg)
+{
+	if (memcmp(si->applet.ctx.stats.api_action, STAT_API_CMD_VERSION, strlen(STAT_API_CMD_VERSION)) == 0) {
+		return chunk_printf(msg, API_VERSION);
+	}
+	return chunk_printf(msg, "NOOP");
+}
+#endif /* USE_API */
+
 static int print_csv_header(struct chunk *msg)
 {
 	return chunk_printf(msg,
@@ -1571,7 +1581,11 @@ static int stats_dump_http(struct stream_interface *si, struct uri_auth *uri)
 			     "Cache-Control: no-cache\r\n"
 			     "Connection: close\r\n"
 			     "Content-Type: %s\r\n",
+#ifdef USE_API
+			     (si->applet.ctx.stats.flags & STAT_FMT_CSV || si->applet.ctx.stats.flags & STAT_API) ? "text/plain" : "text/html");
+#else
 			     (si->applet.ctx.stats.flags & STAT_FMT_CSV) ? "text/plain" : "text/html");
+#endif /* USE_API */
 
 		if (uri->refresh > 0 && !(si->applet.ctx.stats.flags & STAT_NO_REFRESH))
 			chunk_printf(&msg, "Refresh: %d\r\n",
@@ -1598,7 +1612,11 @@ static int stats_dump_http(struct stream_interface *si, struct uri_auth *uri)
 		/* fall through */
 
 	case STAT_ST_HEAD:
+#if USE_API
+		if (!(si->applet.ctx.stats.flags & STAT_FMT_CSV) && !(si->applet.ctx.stats.flags & STAT_API)) {
+#else
 		if (!(si->applet.ctx.stats.flags & STAT_FMT_CSV)) {
+#endif /* USE_API */
 			/* WARNING! This must fit in the first buffer !!! */
 			chunk_printf(&msg,
 			     "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\"\n"
@@ -1693,7 +1711,20 @@ static int stats_dump_http(struct stream_interface *si, struct uri_auth *uri)
 			     (uri->flags&ST_SHNODE) ? (uri->node ? uri->node : global.node) : ""
 			     );
 		} else {
+#ifdef USE_API
+			if (si->applet.ctx.stats.flags & STAT_FMT_CSV) {
+				print_csv_header(&msg);
+
+			} else if (si->applet.ctx.stats.flags & STAT_API) {
+				api_call(si, &msg);
+				if (buffer_feed_chunk(rep, &msg) >= 0)
+					return 0;
+				si->applet.state = STAT_ST_FIN;
+				return 1;
+			}
+#else
 			print_csv_header(&msg);
+#endif /* USE_API */
 		}
 		if (buffer_feed_chunk(rep, &msg) >= 0)
 			return 0;

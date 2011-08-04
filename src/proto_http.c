@@ -7351,6 +7351,37 @@ int stats_check_uri(struct stream_interface *si, struct http_txn *txn, struct pr
 		return 0;
 
 	h += uri_auth->uri_len;
+
+#ifdef USE_API
+	/*
+         * Check to see if there are any calls to /api/ namespace, and
+         * route accordingly.
+         */
+	if (memcmp(h, "api/", 4) == 0) {
+		si->applet.ctx.stats.flags |= STAT_API;
+		
+		/*
+		 * Parsing rules here:
+		 * 1) Break off everything after /api/
+		 * 2) Look for another '/'. If there isn't one, treat the
+		 *    entire remainder as a command.
+		 * 3) If there was a '/', split there and pass the remainder
+		 *    as the argument. If not, parse POST data.
+		 */
+		h += 4;
+		if (*h == ' ') {
+			/* No command given */
+			si->applet.ctx.stats.api_action = STAT_API_CMD_VERSION;
+			return 1;
+		}
+		if (memcmp(h, STAT_API_CMD_VERSION, 7) == 0) {
+			si->applet.ctx.stats.api_action = STAT_API_CMD_VERSION;
+			return 1;
+		}
+		return 1;
+	}
+#endif /* USE_API */
+
 	while (h <= txn->req.sol + txn->req.sl.rq.u + txn->req.sl.rq.u_l - 3) {
 		if (memcmp(h, ";up", 3) == 0) {
 			si->applet.ctx.stats.flags |= STAT_HIDE_DOWN;
