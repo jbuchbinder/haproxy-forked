@@ -1,0 +1,17 @@
+*.o
+*/.svn
+*~
+.flxdisk*
+.flxpkg
+.flxstatus*
+.svn
+haproxy
+src/*.o
+*.rej
+*.orig
+*.log*
+*.trace*
+haproxy-*
+make-*
+dlmalloc.c
+00*.patch

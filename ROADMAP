@@ -1,0 +1,192 @@
+Medium-long term roadmap - 2011/03/01
+
+Legend: '+' = done, '-' = todo, '*' = done except doc
+
+1.5 (ETA 2010/12/31) :
+  - count number of monitor requests on frontends, that's the only way
+    to explain the possible huge difference between frontend and backend
+    sessions.
+
+  - server-side HTTP keepalive
+    => maybe with limitation to only reuse connections that don't depend
+       on layer7 in a first time (just check the target).
+
+  - POST parameter extraction and size/speed measurement to use in ACLs
+
+  - return-html code xxx [ file "xxx" | text "xxx" ] if <acl>
+
+  - return-raw  [ file "xxx" | text "xxx" ] if <acl>
+
+  - avg connect time, response time, connect errors, response errors in stats
+
+  - add a last activity date for each server (req/resp) that will be
+    displayed in the stats. It will be useful with soft stop.
+
+  - add the ability to only dump response errors to more easily detect
+    anomalies without being polluted with attacks in requests.
+
+  - add support for server-side unix sockets
+
+  - have multi-criteria analysers which subscribe to req flags, rsp flags, and
+    stream interface changes. This would result in a single analyser to wait
+    for the end of data transfer in HTTP.
+
+  - implement support for "connection freeze" after accept. A list of frozen
+    connections should be maintained so that it is possible to recycle them
+    when new file descriptors are required.
+
+  - support for time-ordered priority queues with ability to add an offset
+    based on request matching. Each session will have one ebtree node to be
+    attached to whatever queue the session is waiting in.
+
+  - assign a nice priority based on ACLs.
+
+  - dontlog if <acl> (front/back)
+
+  - fix "PR--" flags when accessing stats
+
+  - pattern extraction is needed for ACLs and stickiness. It would work like
+    this :
+
+       acl <name> <pattern> [-i] <values>...
+
+    All ACL fetch method currently available would be transformed into pattern
+    extraction methods. That way we could stick on hdr(x-forwarded-for) or use
+    source 0.0.0.0 usesrc <pattern> (such as "hdr_ip(headername)"). Note that
+    ACLs sometimes need iterative matching/extraction.
+
+  - add support for complex pattern extraction rules :
+
+       pattern = <pattern_term>
+               | '{' pattern_expr '}'
+
+       pattern_expr = <pattern_term> [ <transform> ... ]
+
+  - support loading data sets from files
+      + present/not present (eg: netmasks)
+      - pattern conversion per prefixes. Eg: convert src IP to country.
+
+  - automatically compute fullconn for backends : by default, set it to
+    10% of the sum of the maxconn of all unique frontends which reference
+    it via use_backend, default_backend or that are in the same listen.
+
+  - what to do with data after a POST and how to detect some data were
+    received when responding ? In theory we should read everything because
+    the TCP stack does not notify us that the FIN was acked. In practice,
+    reading just before closing should be enough. Right now we simply read
+    whatever comes after the POST.
+    => switch the connection to a "drain" state, where it monitors its
+       output queue on each I/O and where it can be stolen if fds are
+       missing.
+
+  - half-closed timeouts ?
+
+  - add a flag in logs to indicate keep-alive requests ?
+
+  - make it possible to condition a timeout on an ACL
+
+  - forwardfor/originalto except with IPv6
+
+  - have a callback function which would be called after a server is selected,
+    for header post-processing. That would be mainly used to remove then add
+    the server's name or cookie in a header so that the server knows it.
+
+  - remove lots of remaining Alert() calls or ensure that they forward to
+    send_log() after the fork.
+
+  - initcwnd parameter for bind sockets
+
+DONE:
+  * rename L4 acls as L6 ACLs when some content is involved
+
+  * add new L4 ACL checks immediately after accept, before even allocating the
+    buffers ("connection {accept|reject|delay|freeze} {if|unless}").
+
+  * make new patterns available based on stickiness matching :
+      * number of entries in table for the matched pattern
+      * same after having increased the match counter
+
+  * add support for concurrency match in tables
+      * just like stickiness, but counted per session (or request), increased
+        on first match and decreased at end of request or connection. This
+        requires that the session has a list of matched terms that must be
+        released at the end.
+
+  * http_req_first ACL
+
+  * expirable cookies + "preserve"
+
+  * ECV, LDAPv3 & MySQL checks
+
+  * configurable check buffer size
+
+  * stats + ON/OFF
+
+  * halog: sort by URL
+
+  * "PROXY" protocol
+
+  * add support for client-side unix sockets
+
+  * hash: rehash non-consistent hashes with chash() for more randomness.
+
+  * add an error ID in captures to ease new error detection for scripts.
+
+  * try to remove srv==NULL internally and assign a dummy server to each backend
+    for dispatch, http_proxy and transparent modes. => done differently with the
+    target descriptors. The dummy server code exists in the "dummysrv" branch
+    which will die since it does not make sense anymore.
+
+  * ACL to report number of used entries in a table
+
+
+1.6 (will probably change anyway) :
+  - wait on resource (mem, socket, server's conn, server's rate, ...)
+
+  - bandwidth limits
+
+  - create internal services and make stats, CLI, etc... part of that.
+
+  - use_server ... if ...
+
+  - buddy servers to build defined lists of failovers. Detect loops during
+    the config check.
+
+          server XXX buddy YYY
+          server YYY    # may replace XXX when XXX fails
+
+  - spare servers : servers which are used in LB only when a minimum farm
+    weight threshold is not satisfied anymore. Useful for inter-site LB with
+    local pref by default.
+
+  - add support for event-triggered epoll, and maybe change all events handling
+    to pass through an event cache to handle temporarily disabled events.
+
+  - evaluate the changes required for multi-process+shared mem or multi-thread
+    +thread-local+fast locking.
+
+  - ability to kill an arbitrary session from the command line. Put a "kill now"
+    flag in every session which preempts any other processing and wake the
+    session up.
+
+  - ability to decide whether to drain or kill sessions when putting a server
+    to maintenance mode => requires a per-server session list and the change
+    above.
+
+Old, maybe obsolete points
+ - clarify licence by adding a 'MODULE_LICENCE("GPL")' or something equivalent.
+
+ - 3 memory models : failsafe (prealloc), normal (current), optimal (alloc on
+   demand)
+
+ - ability to assign a task priority based on L7 matching
+
+ - implement support for event-triggerred epoll()
+
+ - verify if it would be worth implementing an epoll_ctl_batch() for Linux
+
+ - option minservers XXX : activates some spare servers when active servers
+   are insufficient
+
+ - new keyword 'check' : check http xxx, check smtp xxx, check ssl-hello
+
