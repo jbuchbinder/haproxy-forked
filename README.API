@@ -1,0 +1,18 @@
+HAPROXY API
+===========
+
+REST-type API to expose haproxy administration and stats.
+
+If haproxy is compiled with "-DUSE_API=1", it will enable this interface,
+which is located at $STATSURL/api/$COMMAND
+
+The list of possible values for $COMMAND are listed below.
+
+"version" command
+-----------------
+
+This command takes no arguments, and returns the version of the API
+being served/supported by haproxy. This is completely arbitrary, and
+should/will change any time something seriously breaking comes along.
+If you pass nothing after api/, you'll probably get this.
+
