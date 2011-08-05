@@ -27,3 +27,20 @@ being served/supported by haproxy. This is completely arbitrary, and
 should/will change any time something seriously breaking comes along.
 If you pass nothing after api/, you'll probably get this.
 
+EXAMPLES
+========
+
+With the examples/haproxy.api.cfg config file....
+
+	http://localhost:60081/api/pool.status/appli4-backup/inst2
+
+would give the status of server inst2 in pool appli4-backup,
+
+	http://localhost:60081/api/pool.disable/appli4-backup/inst2
+
+would "disable" the server (put it in maintenance mode), and
+
+	http://localhost:60081/api/pool.enable/appli4-backup/inst2
+
+would "enable" the server (remove it from maintenance mode).
+
