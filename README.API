@@ -8,6 +8,17 @@ which is located at $STATSURL/api/$COMMAND
 
 The list of possible values for $COMMAND are listed below.
 
+"pool.disable" command
+----------------------
+
+Takes two arguments, proxy and server. Puts a server in "maintenance" mode.
+
+"pool.enable" command
+---------------------
+
+Takes two arguments, proxy and server. Removes a server from "maintenance"
+mode.
+
 "version" command
 -----------------
 

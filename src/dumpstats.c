@@ -65,6 +65,11 @@ static int stats_table_request(struct stream_interface *si, bool show);
 static int stats_dump_proxy(struct stream_interface *si, struct proxy *px, struct uri_auth *uri);
 static int stats_dump_http(struct stream_interface *si, struct uri_auth *uri);
 
+#ifdef USE_API
+static int api_call(struct stream_interface *si, struct chunk *msg);
+char *append_string(char *orig, char *add);
+#endif /* USE_API */
+
 static struct si_applet cli_applet;
 
 static const char stats_sock_usage_msg[] =
@@ -320,10 +325,108 @@ static int stats_parse_global(char **args, int section_type, struct proxy *curpx
 static int api_call(struct stream_interface *si, struct chunk *msg)
 {
 	if (memcmp(si->applet.ctx.stats.api_action, STAT_API_CMD_VERSION, strlen(STAT_API_CMD_VERSION)) == 0) {
+		/* version */
 		return chunk_printf(msg, API_VERSION);
+	}
+	if (memcmp(si->applet.ctx.stats.api_action, STAT_API_CMD_POOL_ENABLE, strlen(STAT_API_CMD_POOL_ENABLE)) == 0) {
+		/* pool.enable */
+
+		struct proxy *px;
+		struct server *sv;
+
+		char *slash = strchr(si->applet.ctx.stats.api_data, '/');
+		if (!slash) {
+			return chunk_printf(msg, "NOOP:NOSERVERGIVEN");
+		}
+
+		int slash_pos = slash - si->applet.ctx.stats.api_data;
+
+		char *proxy_name = malloc(slash_pos + 1);
+		char *server_name = malloc(strlen(si->applet.ctx.stats.api_data) - slash_pos);
+		strncpy(proxy_name, si->applet.ctx.stats.api_data, slash_pos);
+		strncpy(server_name, si->applet.ctx.stats.api_data + slash_pos + 1, strlen(si->applet.ctx.stats.api_data) - slash_pos + 1);
+
+		if (!get_backend_server(proxy_name, server_name, &px, &sv)) {
+			return chunk_printf(msg, "NOOP:SERVERNOTFOUND");
+		}
+
+		if (sv->state & SRV_MAINTAIN) {
+			if (sv->tracked) {
+				if (sv->tracked->state & SRV_RUNNING) {
+					set_server_up(sv);
+					sv->health = sv->rise;
+				} else {
+					sv->state &= ~SRV_MAINTAIN;
+					set_server_down(sv);
+				}
+			} else {
+				set_server_up(sv);
+				sv->health = sv->rise;
+			}
+		} else {
+			return chunk_printf(msg, "OK");
+		}
+
+		/* Send back */
+		return chunk_printf(msg, "OK");
+	}
+	if (memcmp(si->applet.ctx.stats.api_action, STAT_API_CMD_POOL_DISABLE, strlen(STAT_API_CMD_POOL_DISABLE)) == 0) {
+		/* pool.disable */
+
+		struct proxy *px;
+		struct server *sv;
+
+		char *slash = strchr(si->applet.ctx.stats.api_data, '/');
+		if (!slash) {
+			return chunk_printf(msg, "NOOP:NOSERVERGIVEN");
+		}
+
+		int slash_pos = slash - si->applet.ctx.stats.api_data;
+
+		char *proxy_name = malloc(slash_pos + 1);
+		char *server_name = malloc(strlen(si->applet.ctx.stats.api_data) - slash_pos);
+		strncpy(proxy_name, si->applet.ctx.stats.api_data, slash_pos);
+		strncpy(server_name, si->applet.ctx.stats.api_data + slash_pos + 1, strlen(si->applet.ctx.stats.api_data) - slash_pos + 1);
+
+		if (!get_backend_server(proxy_name, server_name, &px, &sv)) {
+			return chunk_printf(msg, "NOOP:SERVERNOTFOUND");
+		}
+
+
+		if (! (sv->state & SRV_MAINTAIN)) {
+			sv->state |= SRV_MAINTAIN;
+			set_server_down(sv);
+		}
+
+		/* Send back */
+		return chunk_printf(msg, "OK");
+	}
+	if (memcmp(si->applet.ctx.stats.api_action, STAT_API_CMD_POOL_GETSERVERS, strlen(STAT_API_CMD_POOL_GETSERVERS)) == 0) {
+		/* pool.getservers */
+		char *out;
+
+		/* Allocate proper amount of memory */
+		out = malloc( 1 );
+
+		/* Build */
+		out = append_string(out, "[");
+		out = append_string(out, "something,something");
+		out = append_string(out, "]");
+
+		/* Send back */
+		return chunk_printf(msg, out);
 	}
 	return chunk_printf(msg, "NOOP");
 }
+
+char *append_string(char *orig, char *add) {
+	int orig_length = strlen(orig);
+	int add_length = strlen(add);
+	char *p = malloc( orig_length + add_length );
+	sprintf(p, "%s%s", orig, add);
+	return p;
+}
+
 #endif /* USE_API */
 
 static int print_csv_header(struct chunk *msg)

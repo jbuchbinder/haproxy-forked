@@ -13,6 +13,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -190,6 +191,10 @@ static const char *http_err_msgs[HTTP_ERR_SIZE] = {
  * on strlen().
  */
 struct chunk http_err_chunks[HTTP_ERR_SIZE];
+
+#ifdef USE_API
+int get_api_parameter_length(char *p, bool allowslashes);
+#endif /* USE_API */
 
 #define FD_SETS_ARE_BITFIELDS
 #ifdef FD_SETS_ARE_BITFIELDS
@@ -7371,11 +7376,56 @@ int stats_check_uri(struct stream_interface *si, struct http_txn *txn, struct pr
 		h += 4;
 		if (*h == ' ') {
 			/* No command given */
+			si->applet.ctx.stats.api_action = STAT_API_CMD_NOOP;
+			return 1;
+		}
+		if (memcmp(h, STAT_API_CMD_VERSION, strlen(STAT_API_CMD_VERSION)) == 0) {
 			si->applet.ctx.stats.api_action = STAT_API_CMD_VERSION;
 			return 1;
 		}
-		if (memcmp(h, STAT_API_CMD_VERSION, 7) == 0) {
-			si->applet.ctx.stats.api_action = STAT_API_CMD_VERSION;
+		if (memcmp(h, STAT_API_CMD_POOL_GETSERVERS, strlen(STAT_API_CMD_POOL_GETSERVERS)) == 0) {
+			si->applet.ctx.stats.api_action = STAT_API_CMD_POOL_GETSERVERS;
+			h += strlen(STAT_API_CMD_POOL_GETSERVERS);
+			if (*h != '/') {
+				si->applet.ctx.stats.api_action = STAT_API_CMD_NOOP;
+				return 1;
+			}
+			h++; /* move pass the slash */
+			int paramlength = get_api_parameter_length( h, false );
+			char *param = malloc( paramlength + 1 );
+			memcpy( param, h, paramlength );
+			*(param + paramlength) = '\0';
+			si->applet.ctx.stats.api_data = param;
+			return 1;
+		}
+		if (memcmp(h, STAT_API_CMD_POOL_ENABLE, strlen(STAT_API_CMD_POOL_ENABLE)) == 0) {
+			si->applet.ctx.stats.api_action = STAT_API_CMD_POOL_ENABLE;
+			h += strlen(STAT_API_CMD_POOL_ENABLE);
+			if (*h != '/') {
+				si->applet.ctx.stats.api_action = STAT_API_CMD_NOOP;
+				return 1;
+			}
+			h++; /* move pass the slash */
+			int paramlength = get_api_parameter_length( h, true );
+			char *param = malloc( paramlength + 1 );
+			memcpy( param, h, paramlength );
+			*(param + paramlength) = '\0';
+			si->applet.ctx.stats.api_data = param;
+			return 1;
+		}
+		if (memcmp(h, STAT_API_CMD_POOL_DISABLE, strlen(STAT_API_CMD_POOL_DISABLE)) == 0) {
+			si->applet.ctx.stats.api_action = STAT_API_CMD_POOL_DISABLE;
+			h += strlen(STAT_API_CMD_POOL_DISABLE);
+			if (*h != '/') {
+				si->applet.ctx.stats.api_action = STAT_API_CMD_NOOP;
+				return 1;
+			}
+			h++; /* move pass the slash */
+			int paramlength = get_api_parameter_length( h, true );
+			char *param = malloc( paramlength + 1 );
+			memcpy( param, h, paramlength );
+			*(param + paramlength) = '\0';
+			si->applet.ctx.stats.api_data = param;
 			return 1;
 		}
 		return 1;
@@ -7434,6 +7484,17 @@ int stats_check_uri(struct stream_interface *si, struct http_txn *txn, struct pr
 
 	return 1;
 }
+
+#ifdef USE_API
+int get_api_parameter_length(char *p, bool allowslashes)
+{
+	int l = 1;
+	while ( *(p + l) != ' ' && ( *(p + l) != '/' || allowslashes) ) {
+		l++;
+	}
+	return l;
+}
+#endif /* USE_API */
 
 /*
  * Capture a bad request or response and archive it in the proxy's structure.
