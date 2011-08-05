@@ -336,7 +336,7 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 
 		char *slash = strchr(si->applet.ctx.stats.api_data, '/');
 		if (!slash) {
-			return chunk_printf(msg, "NOOP:NOSERVERGIVEN");
+			return chunk_printf(msg, STAT_API_RETURN_SERVERNOTGIVEN);
 		}
 
 		int slash_pos = slash - si->applet.ctx.stats.api_data;
@@ -347,7 +347,7 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 		strncpy(server_name, si->applet.ctx.stats.api_data + slash_pos + 1, strlen(si->applet.ctx.stats.api_data) - slash_pos + 1);
 
 		if (!get_backend_server(proxy_name, server_name, &px, &sv)) {
-			return chunk_printf(msg, "NOOP:SERVERNOTFOUND");
+			return chunk_printf(msg, STAT_API_RETURN_SERVERNOTFOUND);
 		}
 
 		if (sv->state & SRV_MAINTAIN) {
@@ -364,11 +364,11 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 				sv->health = sv->rise;
 			}
 		} else {
-			return chunk_printf(msg, "OK");
+			return chunk_printf(msg, STAT_API_RETURN_OK);
 		}
 
 		/* Send back */
-		return chunk_printf(msg, "OK");
+		return chunk_printf(msg, STAT_API_RETURN_OK);
 	}
 	if (memcmp(si->applet.ctx.stats.api_action, STAT_API_CMD_POOL_DISABLE, strlen(STAT_API_CMD_POOL_DISABLE)) == 0) {
 		/* pool.disable */
@@ -378,7 +378,7 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 
 		char *slash = strchr(si->applet.ctx.stats.api_data, '/');
 		if (!slash) {
-			return chunk_printf(msg, "NOOP:NOSERVERGIVEN");
+			return chunk_printf(msg, STAT_API_RETURN_SERVERNOTGIVEN);
 		}
 
 		int slash_pos = slash - si->applet.ctx.stats.api_data;
@@ -389,7 +389,7 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 		strncpy(server_name, si->applet.ctx.stats.api_data + slash_pos + 1, strlen(si->applet.ctx.stats.api_data) - slash_pos + 1);
 
 		if (!get_backend_server(proxy_name, server_name, &px, &sv)) {
-			return chunk_printf(msg, "NOOP:SERVERNOTFOUND");
+			return chunk_printf(msg, STAT_API_RETURN_SERVERNOTFOUND);
 		}
 
 
@@ -399,7 +399,56 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 		}
 
 		/* Send back */
-		return chunk_printf(msg, "OK");
+		return chunk_printf(msg, STAT_API_RETURN_OK);
+	}
+	if (memcmp(si->applet.ctx.stats.api_action, STAT_API_CMD_POOL_STATUS, strlen(STAT_API_CMD_POOL_STATUS)) == 0) {
+		/* pool.status */
+
+		struct proxy *px;
+		struct server *sv;
+
+		char *slash = strchr(si->applet.ctx.stats.api_data, '/');
+		if (!slash) {
+			return chunk_printf(msg, STAT_API_RETURN_SERVERNOTGIVEN);
+		}
+
+		int slash_pos = slash - si->applet.ctx.stats.api_data;
+
+		char *proxy_name = malloc(slash_pos + 1);
+		char *server_name = malloc(strlen(si->applet.ctx.stats.api_data) - slash_pos);
+		strncpy(proxy_name, si->applet.ctx.stats.api_data, slash_pos);
+		strncpy(server_name, si->applet.ctx.stats.api_data + slash_pos + 1, strlen(si->applet.ctx.stats.api_data) - slash_pos + 1);
+
+		if (!get_backend_server(proxy_name, server_name, &px, &sv)) {
+			return chunk_printf(msg, STAT_API_RETURN_SERVERNOTFOUND);
+		}
+
+		char *out;
+
+		out = malloc( 1 );
+
+		out = append_string(out, "{");
+		out = append_string(out, "\"maintenance\":");
+		if (sv->state & SRV_MAINTAIN) {
+			out = append_string(out, "1");
+		} else {
+			out = append_string(out, "0");
+		}
+		out = append_string(out, ",\"up\":");
+		if (sv->state & SRV_RUNNING) {
+			out = append_string(out, "1");
+		} else {
+			out = append_string(out, "0");
+		}
+		out = append_string(out, ",\"backup\":");
+		if (sv->state & SRV_BACKUP) {
+			out = append_string(out, "1");
+		} else {
+			out = append_string(out, "0");
+		}
+		out = append_string(out, "}");
+
+		return chunk_printf(msg, out);
 	}
 	if (memcmp(si->applet.ctx.stats.api_action, STAT_API_CMD_POOL_GETSERVERS, strlen(STAT_API_CMD_POOL_GETSERVERS)) == 0) {
 		/* pool.getservers */

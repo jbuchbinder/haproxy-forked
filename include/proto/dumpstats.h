@@ -70,8 +70,14 @@
 #define STAT_API_CMD_NOOP "noop"	/* no operation */
 #define STAT_API_CMD_VERSION "version"	/* request version */
 #define STAT_API_CMD_POOL_GETSERVERS "pool.getservers"	/* get list of servers in pool */
-#define STAT_API_CMD_POOL_ENABLE "pool.enable"
-#define STAT_API_CMD_POOL_DISABLE "pool.disable"
+#define STAT_API_CMD_POOL_ENABLE "pool.enable" /* enable single server */
+#define STAT_API_CMD_POOL_DISABLE "pool.disable" /* disable single server */
+#define STAT_API_CMD_POOL_STATUS "pool.status" /* single server status */
+
+#define STAT_API_RETURN_OK "{\"status\":\"OK\",\"status_code\":0}"
+#define STAT_API_RETURN_SERVERNOTFOUND "{\"status\":\"FAIL\",\"status_code\":1,\"reason\":\"SERVERNOTFOUND\"}"
+#define STAT_API_RETURN_SERVERNOTGIVEN "{\"status\":\"FAIL\",\"status_code\":1,\"reason\":\"SERVERNOTGIVEN\"}"
+
 #endif /* USE_API */
 
 extern struct si_applet http_stats_applet;
