@@ -78,6 +78,7 @@ OPT_OBJS =
 # Known ones are -DENABLE_POLL
 # - use -DTPROXY to compile with transparent proxy support.
 # - use -DUSE_GETADDRINFO to use of getaddrinfo() to resolve IPv6 host names
+# - use -DUSE_API to enable the RESTful API
 DEFINE = -DTPROXY
 
 # May be changed to patch PAGE_SIZE on every platform when using dlmalloc
