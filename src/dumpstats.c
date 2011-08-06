@@ -68,6 +68,8 @@ static int stats_dump_http(struct stream_interface *si, struct uri_auth *uri);
 #ifdef USE_API
 static int api_call(struct stream_interface *si, struct chunk *msg);
 char *append_string(char *orig, char *add);
+char *append_int(char *orig, int add);
+static int get_proxy(const char *bk_name, struct proxy **bk);
 #endif /* USE_API */
 
 static struct si_applet cli_applet;
@@ -322,6 +324,28 @@ static int stats_parse_global(char **args, int section_type, struct proxy *curpx
 }
 
 #ifdef USE_API
+static int get_proxy(const char *bk_name, struct proxy **bk)
+{
+        struct proxy *p;
+        int pid;
+
+        pid = 0;
+        if (*bk_name == '#')
+                pid = atoi(bk_name + 1);
+
+        for (p = proxy; p; p = p->next)
+                if ((p->cap & PR_CAP_BE) &&
+                    ((pid && p->uuid == pid) ||
+                     (!pid && strcmp(p->id, bk_name) == 0)))
+                        break;
+        if (bk)
+                *bk = p;
+        if (!p)
+                return 0;
+
+        return 1;
+}
+
 static int api_call(struct stream_interface *si, struct chunk *msg)
 {
 	if (memcmp(si->applet.ctx.stats.api_action, STAT_API_CMD_VERSION, strlen(STAT_API_CMD_VERSION)) == 0) {
@@ -367,7 +391,6 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 			return chunk_printf(msg, STAT_API_RETURN_OK);
 		}
 
-		/* Send back */
 		return chunk_printf(msg, STAT_API_RETURN_OK);
 	}
 	if (memcmp(si->applet.ctx.stats.api_action, STAT_API_CMD_POOL_DISABLE, strlen(STAT_API_CMD_POOL_DISABLE)) == 0) {
@@ -398,7 +421,6 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 			set_server_down(sv);
 		}
 
-		/* Send back */
 		return chunk_printf(msg, STAT_API_RETURN_OK);
 	}
 	if (memcmp(si->applet.ctx.stats.api_action, STAT_API_CMD_POOL_STATUS, strlen(STAT_API_CMD_POOL_STATUS)) == 0) {
@@ -450,30 +472,104 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 
 		return chunk_printf(msg, out);
 	}
+	if (memcmp(si->applet.ctx.stats.api_action, STAT_API_CMD_POOL_CONTENTS, strlen(STAT_API_CMD_POOL_CONTENTS)) == 0) {
+		/* pool.contents */
+
+		struct proxy *px;
+		struct server *s;
+
+		if (!si->applet.ctx.stats.api_data || strlen(si->applet.ctx.stats.api_data) < 1) {
+			return chunk_printf(msg, STAT_API_RETURN_PROXYNOTGIVEN);
+		}
+
+		char *proxy_name = si->applet.ctx.stats.api_data;
+
+		if (!get_proxy(proxy_name, &px)) {
+			return chunk_printf(msg, STAT_API_RETURN_PROXYNOTFOUND);
+		}
+
+		char *out;
+
+		out = malloc( 1 );
+
+		out = append_string(out, "[");
+
+		for (s = px->srv; s; s = s->next) {
+			out = append_string(out, "{");
+			out = append_string(out, "\"proxy\":\"");
+			out = append_string(out, s->proxy->id);
+			out = append_string(out, "\",\"server\":\"");
+			out = append_string(out, s->id);
+			out = append_string(out, "\",\"status\":{\"maintenance\":");
+			if (s->state & SRV_MAINTAIN) {
+				out = append_string(out, "1");
+			} else {
+				out = append_string(out, "0");
+			}
+			out = append_string(out, ",\"up\":");
+			if (s->state & SRV_RUNNING) {
+				out = append_string(out, "1");
+			} else {
+				out = append_string(out, "0");
+			}
+			out = append_string(out, ",\"backup\":");
+			if (s->state & SRV_BACKUP) {
+				out = append_string(out, "1");
+			} else {
+				out = append_string(out, "0");
+			}
+			out = append_string(out, "},\"stats\":{\"minconn\":");
+			out = append_int(out, s->minconn);
+			out = append_string(out, ",\"maxconn\":");
+			out = append_int(out, s->maxconn);
+			out = append_string(out, ",\"served\":");
+			out = append_int(out, s->served);
+			out = append_string(out, ",\"cur_sess\":");
+			out = append_int(out, s->cur_sess);
+			out = append_string(out, ",\"nbpend\":");
+			out = append_int(out, s->nbpend);
+			out = append_string(out, ",\"maxqueue\":");
+			out = append_int(out, s->maxqueue);
+			out = append_string(out, ",\"consecutive_errors\":");
+			out = append_int(out, s->consecutive_errors);
+			out = append_string(out, ",\"rise\":");
+			out = append_int(out, s->rise);
+			out = append_string(out, ",\"fall\":");
+			out = append_int(out, s->fall);
+			out = append_string(out, "}}");
+			if (s->next)
+				out = append_string(out, ",");
+		}
+
+		out = append_string(out, "]");
+
+		return chunk_printf(msg, out);
+	}
 	if (memcmp(si->applet.ctx.stats.api_action, STAT_API_CMD_POOL_GETSERVERS, strlen(STAT_API_CMD_POOL_GETSERVERS)) == 0) {
 		/* pool.getservers */
 		char *out;
 
-		/* Allocate proper amount of memory */
 		out = malloc( 1 );
 
-		/* Build */
 		out = append_string(out, "[");
 		out = append_string(out, "something,something");
 		out = append_string(out, "]");
 
-		/* Send back */
 		return chunk_printf(msg, out);
 	}
 	return chunk_printf(msg, "NOOP");
 }
 
 char *append_string(char *orig, char *add) {
-	int orig_length = strlen(orig);
-	int add_length = strlen(add);
-	char *p = malloc( orig_length + add_length );
-	sprintf(p, "%s%s", orig, add);
-	return p;
+	realloc(orig, strlen(orig) + strlen(add) + 1);
+	return strcat(orig, add);
+}
+
+char *append_int(char *orig, int add) {
+	char addstring[16];
+	snprintf(addstring, sizeof(addstring), "%d", add);
+	realloc(orig, strlen(orig) + strlen(addstring) + 1);
+	return strcat(orig, addstring);
 }
 
 #endif /* USE_API */

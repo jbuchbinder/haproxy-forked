@@ -19,6 +19,16 @@ Takes two arguments, proxy and server. Puts a server in "maintenance" mode.
 Takes two arguments, proxy and server. Removes a server from "maintenance"
 mode.
 
+"pool.status" command
+---------------------
+
+Takes two arguments, proxy and server. Gets status for server.
+
+"pool.contents" command
+-----------------------
+
+Takes one argument, proxy. Gets status for all servers in a proxy.
+
 "version" command
 -----------------
 

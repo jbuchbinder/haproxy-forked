@@ -7443,6 +7443,21 @@ int stats_check_uri(struct stream_interface *si, struct http_txn *txn, struct pr
 			si->applet.ctx.stats.api_data = param;
 			return 1;
 		}
+		if (memcmp(h, STAT_API_CMD_POOL_CONTENTS, strlen(STAT_API_CMD_POOL_CONTENTS)) == 0) {
+			si->applet.ctx.stats.api_action = STAT_API_CMD_POOL_CONTENTS;
+			h += strlen(STAT_API_CMD_POOL_CONTENTS);
+			if (*h != '/') {
+				si->applet.ctx.stats.api_action = STAT_API_CMD_NOOP;
+				return 1;
+			}
+			h++; /* move pass the slash */
+			int paramlength = get_api_parameter_length( h, false );
+			char *param = malloc( paramlength + 1 );
+			memcpy( param, h, paramlength );
+			*(param + paramlength) = '\0';
+			si->applet.ctx.stats.api_data = param;
+			return 1;
+		}
 		return 1;
 	}
 #endif /* USE_API */
