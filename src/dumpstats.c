@@ -69,6 +69,7 @@ static int stats_dump_http(struct stream_interface *si, struct uri_auth *uri);
 static int api_call(struct stream_interface *si, struct chunk *msg);
 char *append_string(char *orig, char *add);
 char *append_int(char *orig, int add);
+char *append_long(char *orig, long long add);
 static int get_proxy(const char *bk_name, struct proxy **bk);
 #endif /* USE_API */
 
@@ -536,7 +537,35 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 			out = append_int(out, s->rise);
 			out = append_string(out, ",\"fall\":");
 			out = append_int(out, s->fall);
-			out = append_string(out, "}}");
+			out = append_string(out, ",\"counters\":{\"cur_sess_max\":");
+			out = append_int(out, s->counters.cur_sess_max);
+			out = append_string(out, ",\"nbpend_max\":");
+			out = append_int(out, s->counters.nbpend_max);
+			out = append_string(out, ",\"sps_max\":");
+			out = append_int(out, s->counters.sps_max);
+			out = append_string(out, ",\"cum_sess\":");
+			out = append_long(out, s->counters.cum_sess);
+			out = append_string(out, ",\"cum_lbconn\":");
+			out = append_long(out, s->counters.cum_lbconn);
+			out = append_string(out, ",\"bytes_in\":");
+			out = append_long(out, s->counters.bytes_in);
+			out = append_string(out, ",\"bytes_out\":");
+			out = append_long(out, s->counters.bytes_out);
+			out = append_string(out, ",\"failed_conns\":");
+			out = append_long(out, s->counters.failed_conns);
+			out = append_string(out, ",\"failed_resp\":");
+			out = append_long(out, s->counters.failed_resp);
+			out = append_string(out, ",\"cli_aborts\":");
+			out = append_long(out, s->counters.cli_aborts);
+			out = append_string(out, ",\"srv_aborts\":");
+			out = append_long(out, s->counters.srv_aborts);
+			out = append_string(out, ",\"retries\":");
+			out = append_long(out, s->counters.retries);
+			out = append_string(out, ",\"redispatches\":");
+			out = append_long(out, s->counters.redispatches);
+			out = append_string(out, ",\"failed_secu\":");
+			out = append_long(out, s->counters.failed_secu);
+			out = append_string(out, "}}}");
 			if (s->next)
 				out = append_string(out, ",");
 		}
@@ -568,6 +597,13 @@ char *append_string(char *orig, char *add) {
 char *append_int(char *orig, int add) {
 	char addstring[16];
 	snprintf(addstring, sizeof(addstring), "%d", add);
+	realloc(orig, strlen(orig) + strlen(addstring) + 1);
+	return strcat(orig, addstring);
+}
+
+char *append_long(char *orig, long long add) {
+	char addstring[16];
+	snprintf(addstring, sizeof(addstring), "%11u", add);
 	realloc(orig, strlen(orig) + strlen(addstring) + 1);
 	return strcat(orig, addstring);
 }
