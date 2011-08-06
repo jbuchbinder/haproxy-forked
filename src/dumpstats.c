@@ -537,6 +537,10 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 			out = append_int(out, s->rise);
 			out = append_string(out, ",\"fall\":");
 			out = append_int(out, s->fall);
+			out = append_string(out, ",\"down_time\":");
+			out = append_int(out, (int) s->down_time);
+			out = append_string(out, ",\"puid\":");
+			out = append_int(out, s->puid);
 			out = append_string(out, ",\"counters\":{\"cur_sess_max\":");
 			out = append_int(out, s->counters.cur_sess_max);
 			out = append_string(out, ",\"nbpend_max\":");
@@ -565,6 +569,12 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 			out = append_long(out, s->counters.redispatches);
 			out = append_string(out, ",\"failed_secu\":");
 			out = append_long(out, s->counters.failed_secu);
+			out = append_string(out, ",\"failed_checks\":");
+			out = append_long(out, s->counters.failed_checks);
+			out = append_string(out, ",\"failed_hana\":");
+			out = append_long(out, s->counters.failed_hana);
+			out = append_string(out, ",\"down_trans\":");
+			out = append_long(out, s->counters.down_trans);
 			out = append_string(out, "}}}");
 			if (s->next)
 				out = append_string(out, ",");
