@@ -530,7 +530,8 @@ JSON_C_OBJS = $(JSON_C_DIR)/arraylist.o \
 		$(JSON_C_DIR)/json_tokener.o \
 		$(JSON_C_DIR)/json_util.o \
 		$(JSON_C_DIR)/linkhash.o \
-		$(JSON_C_DIR)/printbuf.o
+		$(JSON_C_DIR)/printbuf.o \
+		$(JSON_C_DIR)/urldecode.o
 
 # Not used right now
 LIB_EBTREE = $(EBTREE_DIR)/libebtree.a

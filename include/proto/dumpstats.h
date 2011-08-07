@@ -74,6 +74,7 @@
 #define STAT_API_CMD_POOL_DISABLE "pool.disable" /* disable single server */
 #define STAT_API_CMD_POOL_STATUS "pool.status" /* single server status */
 #define STAT_API_CMD_POOL_CONTENTS "pool.contents" /* list of all servers */
+#define STAT_API_CMD_POOL_ADD "pool.add" /* add server */
 
 #define STAT_API_RETURN_OK "{\"status\":\"OK\",\"status_code\":0}"
 #define STAT_API_RETURN_SERVERNOTFOUND "{\"status\":\"FAIL\",\"status_code\":1,\"reason\":\"SERVERNOTFOUND\"}"

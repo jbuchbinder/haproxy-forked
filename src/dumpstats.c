@@ -66,6 +66,9 @@ static int stats_dump_proxy(struct stream_interface *si, struct proxy *px, struc
 static int stats_dump_http(struct stream_interface *si, struct uri_auth *uri);
 
 #ifdef USE_API
+#include <json.h>
+#include <urldecode.h>
+
 static int api_call(struct stream_interface *si, struct chunk *msg);
 char *append_string(char *orig, char *add);
 char *append_int(char *orig, int add);
@@ -583,6 +586,34 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 		out = append_string(out, "]");
 
 		return chunk_printf(msg, out);
+	}
+	if (memcmp(si->applet.ctx.stats.api_action, STAT_API_CMD_POOL_ADD, strlen(STAT_API_CMD_POOL_ADD)) == 0) {
+		/* pool.add */
+
+		struct proxy *px;
+		struct server *s;
+
+		/* Decode urlencoded data */
+		char *decoded = malloc(strlen(si->applet.ctx.stats.api_data) + 1);
+		urldecode(decoded, strlen(si->applet.ctx.stats.api_data) + 1, si->applet.ctx.stats.api_data);
+		printf("DEBUG: decoded='%s'\n", decoded);
+
+		struct json_object *new_obj;
+		new_obj = json_tokener_parse(decoded);
+		printf("DEBUG: new_obj.to_string()=%s\n", json_object_to_json_string(new_obj));
+		char *proxy_name = json_object_get_string(json_object_object_get(new_obj, "proxy"));
+
+		if (!proxy_name || strlen(proxy_name) < 1) {
+			return chunk_printf(msg, STAT_API_RETURN_PROXYNOTGIVEN);
+		}
+
+		if (!get_proxy(proxy_name, &px)) {
+			return chunk_printf(msg, STAT_API_RETURN_PROXYNOTFOUND);
+		}
+
+		char *out = malloc(2);
+
+		return chunk_printf(msg, "{}");
 	}
 	if (memcmp(si->applet.ctx.stats.api_action, STAT_API_CMD_POOL_GETSERVERS, strlen(STAT_API_CMD_POOL_GETSERVERS)) == 0) {
 		/* pool.getservers */
