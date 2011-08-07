@@ -81,6 +81,7 @@
 #define STAT_API_RETURN_SERVERNOTGIVEN "{\"status\":\"FAIL\",\"status_code\":1,\"reason\":\"SERVERNOTGIVEN\"}"
 #define STAT_API_RETURN_PROXYNOTGIVEN "{\"status\":\"FAIL\",\"status_code\":1,\"reason\":\"PROXYNOTGIVEN\"}"
 #define STAT_API_RETURN_PROXYNOTFOUND "{\"status\":\"FAIL\",\"status_code\":1,\"reason\":\"PROXYNOTFOUND\"}"
+#define STAT_API_RETURN_OOM "{\"status\":\"FAIL\",\"status_code\":1,\"reason\":\"OUTOFMEMORY\"}"
 
 #endif /* USE_API */
 

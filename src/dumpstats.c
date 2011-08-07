@@ -596,11 +596,9 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 		/* Decode urlencoded data */
 		char *decoded = malloc(strlen(si->applet.ctx.stats.api_data) + 1);
 		urldecode(decoded, strlen(si->applet.ctx.stats.api_data) + 1, si->applet.ctx.stats.api_data);
-		printf("DEBUG: decoded='%s'\n", decoded);
 
 		struct json_object *new_obj;
 		new_obj = json_tokener_parse(decoded);
-		printf("DEBUG: new_obj.to_string()=%s\n", json_object_to_json_string(new_obj));
 		char *proxy_name = json_object_get_string(json_object_object_get(new_obj, "proxy"));
 
 		if (!proxy_name || strlen(proxy_name) < 1) {
@@ -611,9 +609,67 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 			return chunk_printf(msg, STAT_API_RETURN_PROXYNOTFOUND);
 		}
 
-		char *out = malloc(2);
+		/* allocate memory for server */
+		if ((s = (struct server *)calloc(1, sizeof(struct server))) == NULL) {
+			printf("out of memory.\n");
+			return chunk_printf(msg, STAT_API_RETURN_OOM);
+		}
 
-		return chunk_printf(msg, "{}");
+		/* the servers are linked backwards first */
+		s->next = px->srv;
+		px->srv = s;
+		s->proxy = px;
+		s->conf.file = "dynamic";
+		s->conf.line = 0;
+		LIST_INIT(&s->actconns);
+		LIST_INIT(&s->pendconns);
+		s->state = SRV_RUNNING;
+		s->last_change = now.tv_sec;
+		s->id = json_object_get_string(json_object_object_get(new_obj, "server"));
+		s->addr = *(str2ip(json_object_get_string(json_object_object_get(new_obj, "addr"))));
+
+		int realport = json_object_get_int(json_object_object_get(new_obj, "port"));
+		switch (s->addr.ss_family) {
+			case AF_INET:
+				((struct sockaddr_in *)&s->addr)->sin_port = htons(realport);
+				break;
+			case AF_INET6:
+				((struct sockaddr_in6 *)&s->addr)->sin6_port = htons(realport);
+				break;
+		}
+
+		s->check_port      = px->defsrv.check_port;
+		s->inter           = px->defsrv.inter;
+		s->fastinter       = px->defsrv.fastinter;
+		s->downinter       = px->defsrv.downinter;
+		s->rise            = px->defsrv.rise;
+		s->fall            = px->defsrv.fall;
+		s->maxqueue        = px->defsrv.maxqueue;
+		s->minconn         = px->defsrv.minconn;
+		s->maxconn         = px->defsrv.maxconn;
+		s->slowstart       = px->defsrv.slowstart;
+		s->onerror         = px->defsrv.onerror;
+		s->consecutive_errors_limit = px->defsrv.consecutive_errors_limit;
+		s->uweight = s->iweight = px->defsrv.iweight;
+		s->curfd = -1; /* no health-check in progress */
+		s->health = s->rise; /* up, but will fall down at first failure */
+		s->puid = 100; /* TODO: FIXME: determine this from current server ids */
+		s->conf.id.key = s->puid;
+
+		if ( json_object_get_int(json_object_object_get(new_obj, "disabled")) == 1 ) {
+			s->state |= SRV_MAINTAIN;
+			s->state &= ~SRV_RUNNING;
+			s->health = 0;
+		}
+
+		if (s->state & SRV_BACKUP) {
+			px->srv_bck++;
+		} else {
+			px->srv_act++;
+		}
+		s->prev_state = s->state;
+
+		return chunk_printf(msg, STAT_API_RETURN_OK);
 	}
 	if (memcmp(si->applet.ctx.stats.api_action, STAT_API_CMD_POOL_GETSERVERS, strlen(STAT_API_CMD_POOL_GETSERVERS)) == 0) {
 		/* pool.getservers */
