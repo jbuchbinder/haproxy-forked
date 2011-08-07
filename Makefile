@@ -462,9 +462,12 @@ endif
 # This one can be changed to look for ebtree files in an external directory
 EBTREE_DIR := ebtree
 
+# This one can be changed to look for json-c files in an external directory
+JSON_C_DIR := json-c
+
 #### Global compile options
 VERBOSE_CFLAGS = $(CFLAGS) $(TARGET_CFLAGS) $(SMALL_OPTS) $(DEFINE)
-COPTS  = -Iinclude -I$(EBTREE_DIR) -Wall
+COPTS  = -Iinclude -I$(EBTREE_DIR) -I$(JSON_C_DIR) -Wall
 COPTS += $(CFLAGS) $(TARGET_CFLAGS) $(SMALL_OPTS) $(DEFINE) $(SILENT_DEFINE)
 COPTS += $(DEBUG) $(OPTIONS_CFLAGS) $(ADDINC)
 
@@ -521,10 +524,18 @@ EBTREE_OBJS = $(EBTREE_DIR)/ebtree.o \
               $(EBTREE_DIR)/ebmbtree.o $(EBTREE_DIR)/ebsttree.o \
               $(EBTREE_DIR)/ebimtree.o $(EBTREE_DIR)/ebistree.o
 
+JSON_C_OBJS = $(JSON_C_DIR)/arraylist.o \
+		$(JSON_C_DIR)/debug.o \
+		$(JSON_C_DIR)/json_object.o \
+		$(JSON_C_DIR)/json_tokener.o \
+		$(JSON_C_DIR)/json_util.o \
+		$(JSON_C_DIR)/linkhash.o \
+		$(JSON_C_DIR)/printbuf.o
+
 # Not used right now
 LIB_EBTREE = $(EBTREE_DIR)/libebtree.a
 
-haproxy: $(OBJS) $(OPTIONS_OBJS) $(EBTREE_OBJS)
+haproxy: $(OBJS) $(OPTIONS_OBJS) $(EBTREE_OBJS) $(JSON_C_OBJS)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LDOPTS)
 
 $(LIB_EBTREE): $(EBTREE_OBJS)
@@ -566,8 +577,8 @@ install-bin: haproxy
 install: install-bin install-man install-doc
 
 clean:
-	rm -f *.[oas] src/*.[oas] ebtree/*.[oas] haproxy test
-	for dir in . src include/* doc ebtree; do rm -f $$dir/*~ $$dir/*.rej $$dir/core; done
+	rm -f *.[oas] src/*.[oas] ebtree/*.[oas] json-c/*.[oas] haproxy test
+	for dir in . src include/* doc ebtree json-c; do rm -f $$dir/*~ $$dir/*.rej $$dir/core; done
 	rm -f haproxy-$(VERSION).tar.gz haproxy-$(VERSION)$(SUBVERS).tar.gz
 	rm -f haproxy-$(VERSION) nohup.out gmon.out
 
