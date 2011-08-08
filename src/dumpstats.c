@@ -451,7 +451,7 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 
 		char *out;
 
-		out = malloc( 1 );
+		out = malloc( 128 );
 
 		out = append_string(out, "{");
 		out = append_string(out, "\"maintenance\":");
@@ -494,14 +494,14 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 
 		char *out;
 
-		out = malloc( 1 );
+		out = malloc( 4096 );
 
 		out = append_string(out, "[");
 
 		for (s = px->srv; s; s = s->next) {
 			out = append_string(out, "{");
 			out = append_string(out, "\"proxy\":\"");
-			out = append_string(out, s->proxy->id);
+			out = append_string(out, px->id);
 			out = append_string(out, "\",\"server\":\"");
 			out = append_string(out, s->id);
 			out = append_string(out, "\",\"status\":{\"maintenance\":");
@@ -591,50 +591,71 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 		/* pool.add */
 
 		struct proxy *px;
-		struct server *s;
+		struct server *s = NULL;
 
 		/* Decode urlencoded data */
 		char *decoded = malloc(strlen(si->applet.ctx.stats.api_data) + 1);
 		urldecode(decoded, strlen(si->applet.ctx.stats.api_data) + 1, si->applet.ctx.stats.api_data);
 
-		struct json_object *new_obj;
-		new_obj = json_tokener_parse(decoded);
-		char *proxy_name = json_object_get_string(json_object_object_get(new_obj, "proxy"));
+		struct json_object *new_obj = json_tokener_parse(decoded);
+		char *proxy_name = strdup(json_object_get_string(json_object_object_get(new_obj, "proxy")));
 
 		if (!proxy_name || strlen(proxy_name) < 1) {
+			if (new_obj) free(new_obj);
 			return chunk_printf(msg, STAT_API_RETURN_PROXYNOTGIVEN);
 		}
 
 		if (!get_proxy(proxy_name, &px)) {
+			if (new_obj) free(new_obj);
 			return chunk_printf(msg, STAT_API_RETURN_PROXYNOTFOUND);
 		}
+
 
 		/* allocate memory for server */
 		if ((s = (struct server *)calloc(1, sizeof(struct server))) == NULL) {
 			printf("out of memory.\n");
+			if (new_obj) free(new_obj);
 			return chunk_printf(msg, STAT_API_RETURN_OOM);
+		}
+
+		s->id = strdup(json_object_get_string(json_object_object_get(new_obj, "server")));
+
+		if (findserver(px, s->id) != NULL) {
+			printf("found duplicate server with that name.\n");
+			if (new_obj) free(new_obj);
+			return chunk_printf(msg, STAT_API_RETURN_DUPLICATENAME);
 		}
 
 		/* the servers are linked backwards first */
 		s->next = px->srv;
 		px->srv = s;
 		s->proxy = px;
-		s->conf.file = "dynamic";
+		s->conf.file = strdup("dynamic");
 		s->conf.line = 0;
 		LIST_INIT(&s->actconns);
 		LIST_INIT(&s->pendconns);
 		s->state = SRV_RUNNING;
+		px->last_change = now.tv_sec;
 		s->last_change = now.tv_sec;
-		s->id = json_object_get_string(json_object_object_get(new_obj, "server"));
-		s->addr = *(str2ip(json_object_get_string(json_object_object_get(new_obj, "addr"))));
 
-		int realport = json_object_get_int(json_object_object_get(new_obj, "port"));
+		char *raddr = strdup(json_object_get_string(json_object_object_get(new_obj, "addr")));
+		struct sockaddr_storage *sk = str2ip(raddr);
+		s->addr = *sk;
+		free(raddr);
+
+		int realport = 0;
+		if (json_object_object_get(new_obj, "port") == 0) {
+			s->state |= SRV_MAPPORTS;
+		} else {
+			realport = json_object_get_int(json_object_object_get(new_obj, "port"));
+		}
 		switch (s->addr.ss_family) {
-			case AF_INET:
-				((struct sockaddr_in *)&s->addr)->sin_port = htons(realport);
-				break;
 			case AF_INET6:
 				((struct sockaddr_in6 *)&s->addr)->sin6_port = htons(realport);
+				break;
+			case AF_INET:
+			default:
+				((struct sockaddr_in *)&s->addr)->sin_port = htons(realport);
 				break;
 		}
 
@@ -669,6 +690,7 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 		}
 		s->prev_state = s->state;
 
+		if (new_obj) free(new_obj);
 		return chunk_printf(msg, STAT_API_RETURN_OK);
 	}
 	if (memcmp(si->applet.ctx.stats.api_action, STAT_API_CMD_POOL_GETSERVERS, strlen(STAT_API_CMD_POOL_GETSERVERS)) == 0) {
@@ -687,20 +709,23 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 }
 
 char *append_string(char *orig, char *add) {
-	realloc(orig, strlen(orig) + strlen(add) + 1);
+	if (strlen(orig) + strlen(add) + 1 > sizeof(orig))
+		realloc(orig, strlen(orig) + strlen(add) + 1);
 	return strcat(orig, add);
 }
 
 char *append_int(char *orig, int add) {
 	char addstring[16];
 	snprintf(addstring, sizeof(addstring), "%d", add);
-	realloc(orig, strlen(orig) + strlen(addstring) + 1);
+	if (strlen(orig) + strlen(addstring) + 1 > sizeof(orig))
+		realloc(orig, strlen(orig) + strlen(addstring) + 1);
 	return strcat(orig, addstring);
 }
 
 char *append_long(char *orig, long long add) {
 	char addstring[16];
-	snprintf(addstring, sizeof(addstring), "%11u", add);
+	if (strlen(orig) + strlen(addstring) + 1 > sizeof(orig))
+		snprintf(addstring, sizeof(addstring), "%11u", add);
 	realloc(orig, strlen(orig) + strlen(addstring) + 1);
 	return strcat(orig, addstring);
 }
