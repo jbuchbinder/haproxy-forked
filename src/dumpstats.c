@@ -363,6 +363,15 @@ static int get_next_puid(struct proxy *px)
 	return ++max_puid;
 }
 
+int param_json_int_get_with_default(struct json_object* obj, char *key, int default_value)
+{
+	if (!json_object_object_get(obj, key)) {
+		return default_value;
+	} else {
+		return json_object_get_int(json_object_object_get(obj, key));
+	}
+}
+
 static int api_call(struct stream_interface *si, struct chunk *msg)
 {
 	if (memcmp(si->applet.ctx.stats.api_action, STAT_API_CMD_VERSION, strlen(STAT_API_CMD_VERSION)) == 0) {
@@ -658,6 +667,8 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 		s->addr = *sk;
 		free(raddr);
 
+		int check = param_json_int_get_with_default(new_obj, "check", 0);
+
 		int realport = 0;
 		if (json_object_object_get(new_obj, "port") == 0) {
 			s->state |= SRV_MAPPORTS;
@@ -674,19 +685,24 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 				break;
 		}
 
-		s->check_port      = px->defsrv.check_port;
-		s->inter           = px->defsrv.inter;
+		s->check_port = param_json_int_get_with_default(new_obj, "check_port", px->defsrv.check_port);
+		s->inter = param_json_int_get_with_default(new_obj, "inter", px->defsrv.inter);
 		s->fastinter       = px->defsrv.fastinter;
 		s->downinter       = px->defsrv.downinter;
-		s->rise            = px->defsrv.rise;
-		s->fall            = px->defsrv.fall;
+		s->rise = param_json_int_get_with_default(new_obj, "rise", px->defsrv.rise);
+		s->fall = param_json_int_get_with_default(new_obj, "fall", px->defsrv.rise);
 		s->maxqueue        = px->defsrv.maxqueue;
 		s->minconn         = px->defsrv.minconn;
 		s->maxconn         = px->defsrv.maxconn;
 		s->slowstart       = px->defsrv.slowstart;
 		s->onerror         = px->defsrv.onerror;
 		s->consecutive_errors_limit = px->defsrv.consecutive_errors_limit;
-		s->uweight = s->iweight = px->defsrv.iweight;
+		if (!json_object_object_get(new_obj, "weight")) {
+			s->state |= SRV_MAPPORTS;
+			s->uweight = s->iweight = px->defsrv.iweight;
+		} else {
+			s->uweight = s->iweight = json_object_get_int(json_object_object_get(new_obj, "weight"));
+		}
 		s->curfd = -1; /* no health-check in progress */
 		s->health = s->rise; /* up, but will fall down at first failure */
 		s->puid = get_next_puid(px);
@@ -705,9 +721,20 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 		}
 		s->prev_state = s->state;
 
+		if (check) {
+			/* Allocate buffer for partial check results... */
+			if ((s->check_data = calloc(global.tune.chksize, sizeof(char))) == NULL) {
+				printf("out of memory.\n");
+				if (new_obj) free(new_obj);
+				return chunk_printf(msg, STAT_API_RETURN_OOM);
+			}
+			set_server_check_status(s, HCHK_STATUS_START, trash);
+		}
+
 		if (new_obj) free(new_obj);
 
 		if (!(s->state & SRV_MAINTAIN)) set_server_up(s);
+		add_server_check(px, s); /* add check task */
 
 		return chunk_printf(msg, STAT_API_RETURN_OK);
 	}

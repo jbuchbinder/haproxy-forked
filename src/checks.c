@@ -147,7 +147,7 @@ const char *get_analyze_status(short analyze_status) {
 
 #define SSP_O_HCHK	0x0002
 
-static void server_status_printf(struct chunk *msg, struct server *s, unsigned options, int xferred) {
+void server_status_printf(struct chunk *msg, struct server *s, unsigned options, int xferred) {
 
 	if (s->tracked)
 		chunk_printf(msg, " via %s/%s",
@@ -197,7 +197,7 @@ static void server_status_printf(struct chunk *msg, struct server *s, unsigned o
  * Show information in logs about failed health check if server is UP
  * or succeeded health checks if server is DOWN.
  */
-static void set_server_check_status(struct server *s, short status, char *desc) {
+void set_server_check_status(struct server *s, short status, char *desc) {
 
 	struct chunk msg;
 
@@ -1656,6 +1656,31 @@ int start_checks() {
 	}
 	return 0;
 }
+
+#ifdef USE_API
+/*
+ * Dynamically add a server check task.
+ */
+int add_server_check(struct proxy *px, struct server *s)
+{
+	struct task *t;
+
+	if (!(s->state & SRV_CHECKED)) return 1;
+
+	if ((t = task_new()) == NULL) {
+		Alert("Starting [%s:%s] check: out of memory.\n", px->id, s->id);
+		return -1;
+	}
+
+	s->check = t;
+	t->process = process_chk;
+	t->context = s;
+
+	t->expire = tick_add(now_ms, MS_TO_TICKS(srv_getinter(s)));
+	s->check_start = now;
+	task_queue(t);
+}
+#endif /* USE_API */
 
 /*
  * Perform content verification check on data in s->check_data buffer.
