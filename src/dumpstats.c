@@ -350,6 +350,19 @@ static int get_proxy(const char *bk_name, struct proxy **bk)
         return 1;
 }
 
+static int get_next_puid(struct proxy *px)
+{
+	struct server *s;
+	int max_puid = 0;
+	if (!px) return -1;
+	for (s = px->srv; s; s = s->next) {
+		if (s) {
+			if (s->puid > max_puid) max_puid = s->puid;
+		}
+	}
+	return ++max_puid;
+}
+
 static int api_call(struct stream_interface *si, struct chunk *msg)
 {
 	if (memcmp(si->applet.ctx.stats.api_action, STAT_API_CMD_VERSION, strlen(STAT_API_CMD_VERSION)) == 0) {
@@ -504,7 +517,9 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 			out = append_string(out, px->id);
 			out = append_string(out, "\",\"server\":\"");
 			out = append_string(out, s->id);
-			out = append_string(out, "\",\"status\":{\"maintenance\":");
+			out = append_string(out, "\",\"state\":");
+			out = append_int(out, s->state);
+			out = append_string(out, ",\"status\":{\"maintenance\":");
 			if (s->state & SRV_MAINTAIN) {
 				out = append_string(out, "1");
 			} else {
@@ -674,7 +689,7 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 		s->uweight = s->iweight = px->defsrv.iweight;
 		s->curfd = -1; /* no health-check in progress */
 		s->health = s->rise; /* up, but will fall down at first failure */
-		s->puid = 100; /* TODO: FIXME: determine this from current server ids */
+		s->puid = get_next_puid(px);
 		s->conf.id.key = s->puid;
 
 		if ( json_object_get_int(json_object_object_get(new_obj, "disabled")) == 1 ) {
