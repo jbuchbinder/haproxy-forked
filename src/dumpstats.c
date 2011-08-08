@@ -649,7 +649,7 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 		s->conf.line = 0;
 		LIST_INIT(&s->actconns);
 		LIST_INIT(&s->pendconns);
-		s->state = SRV_RUNNING;
+		s->state = SRV_RUNNING | SRV_CHECKED;
 		px->last_change = now.tv_sec;
 		s->last_change = now.tv_sec;
 
@@ -706,6 +706,9 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 		s->prev_state = s->state;
 
 		if (new_obj) free(new_obj);
+
+		if (!(s->state & SRV_MAINTAIN)) set_server_up(s);
+
 		return chunk_printf(msg, STAT_API_RETURN_OK);
 	}
 	if (memcmp(si->applet.ctx.stats.api_action, STAT_API_CMD_POOL_GETSERVERS, strlen(STAT_API_CMD_POOL_GETSERVERS)) == 0) {
