@@ -725,7 +725,7 @@ char *append_int(char *orig, int add) {
 char *append_long(char *orig, long long add) {
 	char addstring[16];
 	if (strlen(orig) + strlen(addstring) + 1 > sizeof(orig))
-		snprintf(addstring, sizeof(addstring), "%11u", add);
+		snprintf(addstring, sizeof(addstring), "%lld", add);
 	realloc(orig, strlen(orig) + strlen(addstring) + 1);
 	return strcat(orig, addstring);
 }
