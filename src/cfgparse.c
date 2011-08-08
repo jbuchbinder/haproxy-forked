@@ -3255,12 +3255,8 @@ stats_error_parsing:
 			/* use HTTP request to check servers' health */
 			free(curproxy->check_req);
 			curproxy->check_req = NULL;
-			curproxy->options &= ~PR_O_SMTP_CHK;
-			curproxy->options2 &= ~PR_O2_SSL3_CHK;
-			curproxy->options2 &= ~PR_O2_MYSQL_CHK;
-			curproxy->options2 &= ~PR_O2_PGSQL_CHK;
-			curproxy->options2 &= ~PR_O2_LDAP_CHK;
-			curproxy->options |= PR_O_HTTP_CHK;
+			curproxy->options2 &= ~PR_O2_CHK_ANY;
+			curproxy->options2 |= PR_O2_HTTP_CHK;
 			if (!*args[2]) { /* no argument */
 				curproxy->check_req = strdup(DEF_CHECK_REQ); /* default request */
 				curproxy->check_len = strlen(DEF_CHECK_REQ);
@@ -3288,23 +3284,15 @@ stats_error_parsing:
 
 			free(curproxy->check_req);
 			curproxy->check_req = NULL;
-			curproxy->options &= ~PR_O_HTTP_CHK;
-			curproxy->options &= ~PR_O_SMTP_CHK;
-			curproxy->options2 &= ~PR_O2_MYSQL_CHK;
-			curproxy->options2 &= ~PR_O2_PGSQL_CHK;
-			curproxy->options2 &= ~PR_O2_LDAP_CHK;
+			curproxy->options2 &= ~PR_O2_CHK_ANY;
 			curproxy->options2 |= PR_O2_SSL3_CHK;
 		}
 		else if (!strcmp(args[1], "smtpchk")) {
 			/* use SMTP request to check servers' health */
 			free(curproxy->check_req);
 			curproxy->check_req = NULL;
-			curproxy->options &= ~PR_O_HTTP_CHK;
-			curproxy->options2 &= ~PR_O2_SSL3_CHK;
-			curproxy->options2 &= ~PR_O2_MYSQL_CHK;
-			curproxy->options2 &= ~PR_O2_PGSQL_CHK;
-			curproxy->options2 &= ~PR_O2_LDAP_CHK;
-			curproxy->options |= PR_O_SMTP_CHK;
+			curproxy->options2 &= ~PR_O2_CHK_ANY;
+			curproxy->options2 |= PR_O2_SMTP_CHK;
 
 			if (!*args[2] || !*args[3]) { /* no argument or incomplete EHLO host */
 				curproxy->check_req = strdup(DEF_SMTP_CHECK_REQ); /* default request */
@@ -3330,11 +3318,7 @@ stats_error_parsing:
 
 			free(curproxy->check_req);
 			curproxy->check_req = NULL;
-			curproxy->options &= ~PR_O_HTTP_CHK;
-			curproxy->options &= ~PR_O_SMTP_CHK;
-			curproxy->options2 &= ~PR_O2_SSL3_CHK;
-			curproxy->options2 &= ~PR_O2_LDAP_CHK;
-			curproxy->options2 &= ~PR_O2_MYSQL_CHK;
+			curproxy->options2 &= ~PR_O2_CHK_ANY;
 			curproxy->options2 |= PR_O2_PGSQL_CHK;
 
 			if (*(args[2])) {
@@ -3386,6 +3370,21 @@ stats_error_parsing:
 			}
 		}
 
+		else if (!strcmp(args[1], "redis-check")) {
+			/* use REDIS PING request to check servers' health */
+			if (warnifnotcap(curproxy, PR_CAP_BE, file, linenum, args[1], NULL))
+				err_code |= ERR_WARN;
+
+			free(curproxy->check_req);
+			curproxy->check_req = NULL;
+			curproxy->options2 &= ~PR_O2_CHK_ANY;
+			curproxy->options2 |= PR_O2_REDIS_CHK;
+
+			curproxy->check_req = (char *) malloc(sizeof(DEF_REDIS_CHECK_REQ) - 1);
+			memcpy(curproxy->check_req, DEF_REDIS_CHECK_REQ, sizeof(DEF_REDIS_CHECK_REQ) - 1);
+			curproxy->check_len = sizeof(DEF_REDIS_CHECK_REQ) - 1;
+		}
+
 		else if (!strcmp(args[1], "mysql-check")) {
 			/* use MYSQL request to check servers' health */
 			if (warnifnotcap(curproxy, PR_CAP_BE, file, linenum, args[1], NULL))
@@ -3393,11 +3392,7 @@ stats_error_parsing:
 
 			free(curproxy->check_req);
 			curproxy->check_req = NULL;
-			curproxy->options &= ~PR_O_HTTP_CHK;
-			curproxy->options &= ~PR_O_SMTP_CHK;
-			curproxy->options2 &= ~PR_O2_SSL3_CHK;
-			curproxy->options2 &= ~PR_O2_LDAP_CHK;
-			curproxy->options2 &= ~PR_O2_PGSQL_CHK;
+			curproxy->options2 &= ~PR_O2_CHK_ANY;
 			curproxy->options2 |= PR_O2_MYSQL_CHK;
 
 			/* This is an exemple of an MySQL >=4.0 client Authentication packet kindly provided by Cyril Bonte.
@@ -3464,11 +3459,7 @@ stats_error_parsing:
 			/* use LDAP request to check servers' health */
 			free(curproxy->check_req);
 			curproxy->check_req = NULL;
-			curproxy->options &= ~PR_O_HTTP_CHK;
-			curproxy->options &= ~PR_O_SMTP_CHK;
-			curproxy->options2 &= ~PR_O2_SSL3_CHK;
-			curproxy->options2 &= ~PR_O2_MYSQL_CHK;
-			curproxy->options2 &= ~PR_O2_PGSQL_CHK;
+			curproxy->options2 &= ~PR_O2_CHK_ANY;
 			curproxy->options2 |= PR_O2_LDAP_CHK;
 
 			curproxy->check_req = (char *) malloc(sizeof(DEF_LDAP_CHECK_REQ) - 1);
@@ -3810,7 +3801,7 @@ stats_error_parsing:
 			goto out;
 		}
 		curproxy->dispatch_addr = *sk;
-		curproxy->options2 |= PR_O2_DISPATCH;
+		curproxy->options |= PR_O_DISPATCH;
 	}
 	else if (!strcmp(args[0], "balance")) {  /* set balancing with optional algorithm */
 		if (warnifnotcap(curproxy, PR_CAP_BE, file, linenum, args[0], NULL))
@@ -5593,14 +5584,13 @@ int check_config_validity()
 					cfgerr++;
 				}
 #endif
-				else if (curproxy->options2 & PR_O2_DISPATCH) {
+				else if (curproxy->options & PR_O_DISPATCH) {
 					Warning("config : dispatch address of %s '%s' will be ignored in balance mode.\n",
 						proxy_type_str(curproxy), curproxy->id);
 					err_code |= ERR_WARN;
 				}
 			}
-			else if (!(curproxy->options & (PR_O_TRANSP | PR_O_HTTP_PROXY)) &&
-				 !(curproxy->options2 & PR_O2_DISPATCH)) {
+			else if (!(curproxy->options & (PR_O_TRANSP | PR_O_DISPATCH | PR_O_HTTP_PROXY))) {
 				/* If no LB algo is set in a backend, and we're not in
 				 * transparent mode, dispatch mode nor proxy mode, we
 				 * want to use balance roundrobin by default.
@@ -5610,31 +5600,26 @@ int check_config_validity()
 			}
 		}
 
-		if (curproxy->options2 & PR_O2_DISPATCH) {
-			curproxy->options  &= ~PR_O_TRANSP;
-			curproxy->options  &= ~PR_O_HTTP_PROXY;
-		}
-		else if (curproxy->options & PR_O_HTTP_PROXY) {
-			curproxy->options2 &= ~PR_O2_DISPATCH;
-			curproxy->options  &= ~PR_O_TRANSP;
-		}
-		else if (curproxy->options & PR_O_TRANSP) {
-			curproxy->options2 &= ~PR_O2_DISPATCH;
-			curproxy->options  &= ~PR_O_HTTP_PROXY;
-		}
+		if (curproxy->options & PR_O_DISPATCH)
+			curproxy->options &= ~(PR_O_TRANSP | PR_O_HTTP_PROXY);
+		else if (curproxy->options & PR_O_HTTP_PROXY)
+			curproxy->options &= ~(PR_O_DISPATCH | PR_O_TRANSP);
+		else if (curproxy->options & PR_O_TRANSP)
+			curproxy->options &= ~(PR_O_DISPATCH | PR_O_HTTP_PROXY);
 
-		if ((curproxy->options & PR_O_DISABLE404) && !(curproxy->options & PR_O_HTTP_CHK)) {
-			curproxy->options &= ~PR_O_DISABLE404;
-			Warning("config : '%s' will be ignored for %s '%s' (requires 'option httpchk').\n",
-				"disable-on-404", proxy_type_str(curproxy), curproxy->id);
-			err_code |= ERR_WARN;
-		}
-
-		if ((curproxy->options2 & PR_O2_CHK_SNDST) && !(curproxy->options & PR_O_HTTP_CHK)) {
-			curproxy->options &= ~PR_O2_CHK_SNDST;
-			Warning("config : '%s' will be ignored for %s '%s' (requires 'option httpchk').\n",
-				"send-state", proxy_type_str(curproxy), curproxy->id);
-			err_code |= ERR_WARN;
+		if ((curproxy->options2 & PR_O2_CHK_ANY) != PR_O2_HTTP_CHK) {
+			if (curproxy->options & PR_O_DISABLE404) {
+				Warning("config : '%s' will be ignored for %s '%s' (requires 'option httpchk').\n",
+					"disable-on-404", proxy_type_str(curproxy), curproxy->id);
+				err_code |= ERR_WARN;
+				curproxy->options &= ~PR_O_DISABLE404;
+			}
+			if (curproxy->options2 & PR_O2_CHK_SNDST) {
+				Warning("config : '%s' will be ignored for %s '%s' (requires 'option httpchk').\n",
+					"send-state", proxy_type_str(curproxy), curproxy->id);
+				err_code |= ERR_WARN;
+				curproxy->options &= ~PR_O2_CHK_SNDST;
+			}
 		}
 
 		/* if a default backend was specified, let's find it */
@@ -5975,7 +5960,7 @@ out_uri_auth_compat:
 			}
 		}
 
-		if (curproxy->options2 & PR_O2_SSL3_CHK) {
+		if ((curproxy->options2 & PR_O2_CHK_ANY) == PR_O2_SSL3_CHK) {
 			curproxy->check_len = sizeof(sslv3_client_hello_pkt) - 1;
 			curproxy->check_req = (char *)malloc(curproxy->check_len);
 			memcpy(curproxy->check_req, sslv3_client_hello_pkt, curproxy->check_len);

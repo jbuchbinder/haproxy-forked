@@ -618,7 +618,7 @@ int assign_server(struct session *s)
 		}
 		set_target_server(&s->target, srv);
 	}
-	else if ((s->be->options2 & PR_O2_DISPATCH) || (s->be->options & PR_O_TRANSP)) {
+	else if (s->be->options & (PR_O_DISPATCH | PR_O_TRANSP)) {
 		set_target_proxy(&s->target, s->be);
 	}
 	else if ((s->be->options & PR_O_HTTP_PROXY) &&
@@ -720,7 +720,7 @@ int assign_server_address(struct session *s)
 			}
 		}
 	}
-	else if (s->be->options2 & PR_O2_DISPATCH) {
+	else if (s->be->options & PR_O_DISPATCH) {
 		/* connect to the defined dispatch addr */
 		s->req->cons->addr.s.to = s->be->dispatch_addr;
 	}
@@ -1551,6 +1551,17 @@ acl_fetch_avg_queue_size(struct proxy *px, struct session *l4, void *l7, int dir
 	return 1;
 }
 
+/* set test->i to the number of concurrent connections on the server in the backend */
+static int
+acl_fetch_srv_conn(struct proxy *px, struct session *l4, void *l7, int dir,
+		  struct acl_expr *expr, struct acl_test *test)
+{
+	struct server *srv = expr->arg.srv;
+
+	test->i = srv->cur_sess;
+	return 1;
+}
+
 /* Note: must not be declared <const> as its list will be overwritten */
 static struct acl_kw_list acl_kws = {{ },{
 	{ "nbsrv",        acl_parse_int,     acl_fetch_nbsrv,          acl_match_int,     ACL_USE_NOTHING },
@@ -1562,6 +1573,7 @@ static struct acl_kw_list acl_kws = {{ },{
 	{ "avg_queue",    acl_parse_int,     acl_fetch_avg_queue_size, acl_match_int,     ACL_USE_NOTHING },
 	{ "srv_is_up",    acl_parse_nothing, acl_fetch_srv_is_up,      acl_match_nothing, ACL_USE_NOTHING },
 	{ "srv_id",       acl_parse_int,     acl_fetch_srv_id,         acl_match_int,     ACL_USE_RTR_INTERNAL },
+	{ "srv_conn",     acl_parse_int,     acl_fetch_srv_conn,       acl_match_int,     ACL_USE_NOTHING },
 	{ NULL, NULL, NULL, NULL },
 }};
 
