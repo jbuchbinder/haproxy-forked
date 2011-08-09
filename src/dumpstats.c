@@ -372,6 +372,25 @@ int param_json_int_get_with_default(struct json_object* obj, char *key, int defa
 	}
 }
 
+char *json_return_status(bool success, int status, char *reason)
+{
+	json_object *obj = json_object_new_object();
+	json_object_object_add(obj, "success", json_object_new_boolean(success));
+	json_object_object_add(obj, "status", json_object_new_string(success ? "OK" : "FAIL"));
+	json_object_object_add(obj, "status_code", json_object_new_int(status));
+	if (reason) json_object_object_add(obj, "reason", json_object_new_string(reason));
+	return strdup(json_object_to_json_string(obj));
+}
+
+/* Define return codes */
+#define STAT_API_RETURN_OK		json_return_status(true, 0, NULL)
+#define STAT_API_RETURN_SERVERNOTFOUND	json_return_status(false, 1, "SERVERNOTFOUND")
+#define STAT_API_RETURN_SERVERNOTGIVEN	json_return_status(false, 1, "SERVERNOTGIVEN")
+#define STAT_API_RETURN_PROXYNOTGIVEN	json_return_status(false, 1, "PROXYNOTGIVEN")
+#define STAT_API_RETURN_PROXYNOTFOUND	json_return_status(false, 1, "PROXYNOTFOUND")
+#define STAT_API_RETURN_DUPLICATENAME	json_return_status(false, 1, "DUPLICATENAME")
+#define STAT_API_RETURN_OOM		json_return_status(false, 1, "OUTOFMEMORY")
+
 static int api_call(struct stream_interface *si, struct chunk *msg)
 {
 	if (memcmp(si->applet.ctx.stats.api_action, STAT_API_CMD_VERSION, strlen(STAT_API_CMD_VERSION)) == 0) {
@@ -471,32 +490,11 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 			return chunk_printf(msg, STAT_API_RETURN_SERVERNOTFOUND);
 		}
 
-		char *out;
-
-		out = malloc( 128 );
-
-		out = append_string(out, "{");
-		out = append_string(out, "\"maintenance\":");
-		if (sv->state & SRV_MAINTAIN) {
-			out = append_string(out, "1");
-		} else {
-			out = append_string(out, "0");
-		}
-		out = append_string(out, ",\"up\":");
-		if (sv->state & SRV_RUNNING) {
-			out = append_string(out, "1");
-		} else {
-			out = append_string(out, "0");
-		}
-		out = append_string(out, ",\"backup\":");
-		if (sv->state & SRV_BACKUP) {
-			out = append_string(out, "1");
-		} else {
-			out = append_string(out, "0");
-		}
-		out = append_string(out, "}");
-
-		return chunk_printf(msg, out);
+		json_object *out = json_object_new_object();
+		json_object_object_add(out, "maintenance", json_object_new_boolean(sv->state & SRV_MAINTAIN));
+		json_object_object_add(out, "up", json_object_new_boolean(sv->state & SRV_RUNNING));
+		json_object_object_add(out, "backup", json_object_new_boolean(sv->state & SRV_BACKUP));
+		return chunk_printf(msg, json_object_to_json_string(out));
 	}
 	if (memcmp(si->applet.ctx.stats.api_action, STAT_API_CMD_POOL_CONTENTS, strlen(STAT_API_CMD_POOL_CONTENTS)) == 0) {
 		/* pool.contents */
@@ -514,102 +512,59 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 			return chunk_printf(msg, STAT_API_RETURN_PROXYNOTFOUND);
 		}
 
-		char *out;
-
-		out = malloc( 4096 );
-
-		out = append_string(out, "[");
+		json_object *out_array = json_object_new_array();
 
 		for (s = px->srv; s; s = s->next) {
-			out = append_string(out, "{");
-			out = append_string(out, "\"proxy\":\"");
-			out = append_string(out, px->id);
-			out = append_string(out, "\",\"server\":\"");
-			out = append_string(out, s->id);
-			out = append_string(out, "\",\"state\":");
-			out = append_int(out, s->state);
-			out = append_string(out, ",\"status\":{\"maintenance\":");
-			if (s->state & SRV_MAINTAIN) {
-				out = append_string(out, "1");
-			} else {
-				out = append_string(out, "0");
-			}
-			out = append_string(out, ",\"up\":");
-			if (s->state & SRV_RUNNING) {
-				out = append_string(out, "1");
-			} else {
-				out = append_string(out, "0");
-			}
-			out = append_string(out, ",\"backup\":");
-			if (s->state & SRV_BACKUP) {
-				out = append_string(out, "1");
-			} else {
-				out = append_string(out, "0");
-			}
-			out = append_string(out, "},\"stats\":{\"minconn\":");
-			out = append_int(out, s->minconn);
-			out = append_string(out, ",\"maxconn\":");
-			out = append_int(out, s->maxconn);
-			out = append_string(out, ",\"served\":");
-			out = append_int(out, s->served);
-			out = append_string(out, ",\"cur_sess\":");
-			out = append_int(out, s->cur_sess);
-			out = append_string(out, ",\"nbpend\":");
-			out = append_int(out, s->nbpend);
-			out = append_string(out, ",\"maxqueue\":");
-			out = append_int(out, s->maxqueue);
-			out = append_string(out, ",\"consecutive_errors\":");
-			out = append_int(out, s->consecutive_errors);
-			out = append_string(out, ",\"rise\":");
-			out = append_int(out, s->rise);
-			out = append_string(out, ",\"fall\":");
-			out = append_int(out, s->fall);
-			out = append_string(out, ",\"down_time\":");
-			out = append_int(out, (int) s->down_time);
-			out = append_string(out, ",\"puid\":");
-			out = append_int(out, s->puid);
-			out = append_string(out, ",\"counters\":{\"cur_sess_max\":");
-			out = append_int(out, s->counters.cur_sess_max);
-			out = append_string(out, ",\"nbpend_max\":");
-			out = append_int(out, s->counters.nbpend_max);
-			out = append_string(out, ",\"sps_max\":");
-			out = append_int(out, s->counters.sps_max);
-			out = append_string(out, ",\"cum_sess\":");
-			out = append_long(out, s->counters.cum_sess);
-			out = append_string(out, ",\"cum_lbconn\":");
-			out = append_long(out, s->counters.cum_lbconn);
-			out = append_string(out, ",\"bytes_in\":");
-			out = append_long(out, s->counters.bytes_in);
-			out = append_string(out, ",\"bytes_out\":");
-			out = append_long(out, s->counters.bytes_out);
-			out = append_string(out, ",\"failed_conns\":");
-			out = append_long(out, s->counters.failed_conns);
-			out = append_string(out, ",\"failed_resp\":");
-			out = append_long(out, s->counters.failed_resp);
-			out = append_string(out, ",\"cli_aborts\":");
-			out = append_long(out, s->counters.cli_aborts);
-			out = append_string(out, ",\"srv_aborts\":");
-			out = append_long(out, s->counters.srv_aborts);
-			out = append_string(out, ",\"retries\":");
-			out = append_long(out, s->counters.retries);
-			out = append_string(out, ",\"redispatches\":");
-			out = append_long(out, s->counters.redispatches);
-			out = append_string(out, ",\"failed_secu\":");
-			out = append_long(out, s->counters.failed_secu);
-			out = append_string(out, ",\"failed_checks\":");
-			out = append_long(out, s->counters.failed_checks);
-			out = append_string(out, ",\"failed_hana\":");
-			out = append_long(out, s->counters.failed_hana);
-			out = append_string(out, ",\"down_trans\":");
-			out = append_long(out, s->counters.down_trans);
-			out = append_string(out, "}}}");
-			if (s->next)
-				out = append_string(out, ",");
+			json_object *obj_server = json_object_new_object();
+			json_object_object_add(obj_server, "proxy", json_object_new_string(px->id));
+			json_object_object_add(obj_server, "server", json_object_new_string(s->id));
+			json_object_object_add(obj_server, "state", json_object_new_int(s->state));
+
+			json_object *obj_status = json_object_new_object();
+			json_object_object_add(obj_status, "maintenance", json_object_new_boolean(s->state & SRV_MAINTAIN));
+			json_object_object_add(obj_status, "up", json_object_new_boolean(s->state & SRV_RUNNING));
+			json_object_object_add(obj_status, "backup", json_object_new_boolean(s->state & SRV_BACKUP));
+			json_object_object_add(obj_server, "status", obj_status);
+
+			json_object *obj_stats = json_object_new_object();
+			json_object_object_add(obj_stats, "minconn", json_object_new_int(s->minconn));
+			json_object_object_add(obj_stats, "maxconn", json_object_new_int(s->maxconn));
+			json_object_object_add(obj_stats, "served", json_object_new_int(s->served));
+			json_object_object_add(obj_stats, "cur_sess", json_object_new_int(s->cur_sess));
+			json_object_object_add(obj_stats, "nbpend", json_object_new_int(s->nbpend));
+			json_object_object_add(obj_stats, "maxqueue", json_object_new_int(s->maxqueue));
+			json_object_object_add(obj_stats, "consecutive_errors", json_object_new_int(s->consecutive_errors));
+			json_object_object_add(obj_stats, "rise", json_object_new_int(s->rise));
+			json_object_object_add(obj_stats, "fall", json_object_new_int(s->fall));
+			json_object_object_add(obj_stats, "down_time", json_object_new_int((int) s->down_time));
+			json_object_object_add(obj_stats, "puid", json_object_new_int(s->puid));
+
+			json_object *obj_counters = json_object_new_object();
+			json_object_object_add(obj_counters, "cur_sess_max", json_object_new_int(s->counters.cur_sess_max));
+			json_object_object_add(obj_counters, "nbpend_max", json_object_new_int(s->counters.nbpend_max));
+			json_object_object_add(obj_counters, "sps_max", json_object_new_int(s->counters.sps_max));
+			json_object_object_add(obj_counters, "cum_sess", json_object_new_int(s->counters.cum_sess));
+			json_object_object_add(obj_counters, "cum_lbconn", json_object_new_int(s->counters.cum_lbconn));
+			json_object_object_add(obj_counters, "bytes_in", json_object_new_int(s->counters.bytes_in));
+			json_object_object_add(obj_counters, "bytes_out", json_object_new_int(s->counters.bytes_out));
+			json_object_object_add(obj_counters, "failed_conns", json_object_new_int(s->counters.failed_conns));
+			json_object_object_add(obj_counters, "failed_resp", json_object_new_int(s->counters.failed_resp));
+			json_object_object_add(obj_counters, "cli_aborts", json_object_new_int(s->counters.cli_aborts));
+			json_object_object_add(obj_counters, "srv_aborts", json_object_new_int(s->counters.srv_aborts));
+			json_object_object_add(obj_counters, "retries", json_object_new_int(s->counters.retries));
+			json_object_object_add(obj_counters, "redispatches", json_object_new_int(s->counters.redispatches));
+			json_object_object_add(obj_counters, "failed_secu", json_object_new_int(s->counters.failed_secu));
+			json_object_object_add(obj_counters, "failed_checks", json_object_new_int(s->counters.failed_checks));
+			json_object_object_add(obj_counters, "failed_hana", json_object_new_int(s->counters.failed_hana));
+			json_object_object_add(obj_counters, "down_trans", json_object_new_int(s->counters.down_trans));
+			json_object_object_add(obj_stats, "counters", obj_counters);
+
+			json_object_object_add(obj_server, "stats", obj_stats);
+
+			json_object_array_add(out_array, obj_server);
 		}
 
-		out = append_string(out, "]");
-
-		return chunk_printf(msg, out);
+		return chunk_printf(msg, json_object_to_json_string(out_array));
 	}
 	if (memcmp(si->applet.ctx.stats.api_action, STAT_API_CMD_POOL_ADD, strlen(STAT_API_CMD_POOL_ADD)) == 0) {
 		/* pool.add */
@@ -740,17 +695,13 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 	}
 	if (memcmp(si->applet.ctx.stats.api_action, STAT_API_CMD_POOL_GETSERVERS, strlen(STAT_API_CMD_POOL_GETSERVERS)) == 0) {
 		/* pool.getservers */
-		char *out;
+		json_object *out = json_object_new_array();
 
-		out = malloc( 1 );
+		/* TODO: FIXME: populate properly */
 
-		out = append_string(out, "[");
-		out = append_string(out, "something,something");
-		out = append_string(out, "]");
-
-		return chunk_printf(msg, out);
+		return chunk_printf(msg, json_object_to_json_string(out));
 	}
-	return chunk_printf(msg, "NOOP");
+	return chunk_printf(msg, STAT_API_RETURN_OK);
 }
 
 char *append_string(char *orig, char *add) {

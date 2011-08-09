@@ -76,14 +76,6 @@
 #define STAT_API_CMD_POOL_CONTENTS "pool.contents" /* list of all servers */
 #define STAT_API_CMD_POOL_ADD "pool.add" /* add server */
 
-#define STAT_API_RETURN_OK "{\"status\":\"OK\",\"status_code\":0}"
-#define STAT_API_RETURN_SERVERNOTFOUND "{\"status\":\"FAIL\",\"status_code\":1,\"reason\":\"SERVERNOTFOUND\"}"
-#define STAT_API_RETURN_SERVERNOTGIVEN "{\"status\":\"FAIL\",\"status_code\":1,\"reason\":\"SERVERNOTGIVEN\"}"
-#define STAT_API_RETURN_PROXYNOTGIVEN "{\"status\":\"FAIL\",\"status_code\":1,\"reason\":\"PROXYNOTGIVEN\"}"
-#define STAT_API_RETURN_PROXYNOTFOUND "{\"status\":\"FAIL\",\"status_code\":1,\"reason\":\"PROXYNOTFOUND\"}"
-#define STAT_API_RETURN_DUPLICATENAME "{\"status\":\"FAIL\",\"status_code\":1,\"reason\":\"DUPLICATENAME\"}"
-#define STAT_API_RETURN_OOM "{\"status\":\"FAIL\",\"status_code\":1,\"reason\":\"OUTOFMEMORY\"}"
-
 #endif /* USE_API */
 
 extern struct si_applet http_stats_applet;
