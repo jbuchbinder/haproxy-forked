@@ -66,13 +66,11 @@ static int stats_dump_proxy(struct stream_interface *si, struct proxy *px, struc
 static int stats_dump_http(struct stream_interface *si, struct uri_auth *uri);
 
 #ifdef USE_API
+#include <eb32tree.h>
 #include <json.h>
 #include <urldecode.h>
 
 static int api_call(struct stream_interface *si, struct chunk *msg);
-char *append_string(char *orig, char *add);
-char *append_int(char *orig, int add);
-char *append_long(char *orig, long long add);
 static int get_proxy(const char *bk_name, struct proxy **bk);
 #endif /* USE_API */
 
@@ -363,6 +361,15 @@ static int get_next_puid(struct proxy *px)
 	return ++max_puid;
 }
 
+bool param_json_bool_get_with_default(struct json_object* obj, char *key, bool default_value)
+{
+	if (!json_object_object_get(obj, key)) {
+		return default_value;
+	} else {
+		return json_object_get_boolean(json_object_object_get(obj, key));
+	}
+}
+
 int param_json_int_get_with_default(struct json_object* obj, char *key, int default_value)
 {
 	if (!json_object_object_get(obj, key)) {
@@ -622,7 +629,7 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 		s->addr = *sk;
 		free(raddr);
 
-		int check = param_json_int_get_with_default(new_obj, "check", 0);
+		bool check = param_json_bool_get_with_default(new_obj, "check", false);
 
 		int realport = 0;
 		if (json_object_object_get(new_obj, "port") == 0) {
@@ -663,7 +670,7 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 		s->puid = get_next_puid(px);
 		s->conf.id.key = s->puid;
 
-		if ( json_object_get_int(json_object_object_get(new_obj, "disabled")) == 1 ) {
+		if (json_object_get_boolean(json_object_object_get(new_obj, "disabled"))) {
 			s->state |= SRV_MAINTAIN;
 			s->state &= ~SRV_RUNNING;
 			s->health = 0;
@@ -693,6 +700,59 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 
 		return chunk_printf(msg, STAT_API_RETURN_OK);
 	}
+	if (memcmp(si->applet.ctx.stats.api_action, STAT_API_CMD_POOL_REMOVE, strlen(STAT_API_CMD_POOL_REMOVE)) == 0) {
+		/* pool.remove */
+
+		struct proxy *px;
+		struct server *sv;
+
+		char *slash = strchr(si->applet.ctx.stats.api_data, '/');
+		if (!slash) {
+			return chunk_printf(msg, STAT_API_RETURN_SERVERNOTGIVEN);
+		}
+
+		int slash_pos = slash - si->applet.ctx.stats.api_data;
+
+		char *proxy_name = malloc(slash_pos + 1);
+		char *server_name = malloc(strlen(si->applet.ctx.stats.api_data) - slash_pos);
+		strncpy(proxy_name, si->applet.ctx.stats.api_data, slash_pos);
+		strncpy(server_name, si->applet.ctx.stats.api_data + slash_pos + 1, strlen(si->applet.ctx.stats.api_data) - slash_pos + 1);
+
+		if (!get_backend_server(proxy_name, server_name, &px, &sv)) {
+			if (server_name) free(server_name);
+			if (proxy_name) free(proxy_name);
+			return chunk_printf(msg, STAT_API_RETURN_SERVERNOTFOUND);
+		}
+
+		/* First, set to maintenance mode while we work */
+		if (! (sv->state & SRV_MAINTAIN)) {
+			sv->state |= SRV_MAINTAIN;
+			set_server_down(sv);
+		}
+
+		/* Remove task from list */
+		/*
+		FIXME: Needs to be removed properly, currently segfaults.
+		eb32_delete(sv->check);
+                __task_unlink_rq(sv->check);
+		*/
+
+		/* Find the server pointing at this one and skip around it */
+		struct server *s2;
+		for (s2 = px->srv; s2; s2 = s2->next) {
+			if (s2->next == sv) {
+				s2->next = sv->next;
+				continue;
+			}
+		}
+
+		/* Free any allocated memory */
+		if (sv) free(sv);	
+		if (server_name) free(server_name);
+		if (proxy_name) free(proxy_name);
+
+		return chunk_printf(msg, STAT_API_RETURN_OK);
+	}
 	if (memcmp(si->applet.ctx.stats.api_action, STAT_API_CMD_POOL_GETSERVERS, strlen(STAT_API_CMD_POOL_GETSERVERS)) == 0) {
 		/* pool.getservers */
 		json_object *out = json_object_new_array();
@@ -702,28 +762,6 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 		return chunk_printf(msg, json_object_to_json_string(out));
 	}
 	return chunk_printf(msg, STAT_API_RETURN_OK);
-}
-
-char *append_string(char *orig, char *add) {
-	if (strlen(orig) + strlen(add) + 1 > sizeof(orig))
-		realloc(orig, strlen(orig) + strlen(add) + 1);
-	return strcat(orig, add);
-}
-
-char *append_int(char *orig, int add) {
-	char addstring[16];
-	snprintf(addstring, sizeof(addstring), "%d", add);
-	if (strlen(orig) + strlen(addstring) + 1 > sizeof(orig))
-		realloc(orig, strlen(orig) + strlen(addstring) + 1);
-	return strcat(orig, addstring);
-}
-
-char *append_long(char *orig, long long add) {
-	char addstring[16];
-	if (strlen(orig) + strlen(addstring) + 1 > sizeof(orig))
-		snprintf(addstring, sizeof(addstring), "%lld", add);
-	realloc(orig, strlen(orig) + strlen(addstring) + 1);
-	return strcat(orig, addstring);
 }
 
 #endif /* USE_API */

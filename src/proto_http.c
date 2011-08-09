@@ -7390,7 +7390,7 @@ int stats_check_uri(struct stream_interface *si, struct http_txn *txn, struct pr
 				si->applet.ctx.stats.api_action = STAT_API_CMD_NOOP;
 				return 1;
 			}
-			h++; /* move pass the slash */
+			h++;
 			int paramlength = get_api_parameter_length( h, false );
 			char *param = malloc( paramlength + 1 );
 			memcpy( param, h, paramlength );
@@ -7405,7 +7405,7 @@ int stats_check_uri(struct stream_interface *si, struct http_txn *txn, struct pr
 				si->applet.ctx.stats.api_action = STAT_API_CMD_NOOP;
 				return 1;
 			}
-			h++; /* move pass the slash */
+			h++;
 			int paramlength = get_api_parameter_length( h, true );
 			char *param = malloc( paramlength + 1 );
 			memcpy( param, h, paramlength );
@@ -7420,7 +7420,7 @@ int stats_check_uri(struct stream_interface *si, struct http_txn *txn, struct pr
 				si->applet.ctx.stats.api_action = STAT_API_CMD_NOOP;
 				return 1;
 			}
-			h++; /* move pass the slash */
+			h++;
 			int paramlength = get_api_parameter_length( h, true );
 			char *param = malloc( paramlength + 1 );
 			memcpy( param, h, paramlength );
@@ -7435,7 +7435,7 @@ int stats_check_uri(struct stream_interface *si, struct http_txn *txn, struct pr
 				si->applet.ctx.stats.api_action = STAT_API_CMD_NOOP;
 				return 1;
 			}
-			h++; /* move pass the slash */
+			h++;
 			int paramlength = get_api_parameter_length( h, true );
 			char *param = malloc( paramlength + 1 );
 			memcpy( param, h, paramlength );
@@ -7467,6 +7467,21 @@ int stats_check_uri(struct stream_interface *si, struct http_txn *txn, struct pr
 			}
 			h++;
 			int paramlength = get_api_parameter_length( h, false );
+			char *param = malloc( paramlength + 1 );
+			memcpy( param, h, paramlength );
+			*(param + paramlength) = '\0';
+			si->applet.ctx.stats.api_data = param;
+			return 1;
+		}
+		if (memcmp(h, STAT_API_CMD_POOL_REMOVE, strlen(STAT_API_CMD_POOL_REMOVE)) == 0) {
+			si->applet.ctx.stats.api_action = STAT_API_CMD_POOL_REMOVE;
+			h += strlen(STAT_API_CMD_POOL_REMOVE);
+			if (*h != '/') {
+				si->applet.ctx.stats.api_action = STAT_API_CMD_NOOP;
+				return 1;
+			}
+			h++;
+			int paramlength = get_api_parameter_length( h, true );
 			char *param = malloc( paramlength + 1 );
 			memcpy( param, h, paramlength );
 			*(param + paramlength) = '\0';

@@ -75,6 +75,7 @@
 #define STAT_API_CMD_POOL_STATUS "pool.status" /* single server status */
 #define STAT_API_CMD_POOL_CONTENTS "pool.contents" /* list of all servers */
 #define STAT_API_CMD_POOL_ADD "pool.add" /* add server */
+#define STAT_API_CMD_POOL_REMOVE "pool.remove" /* remove server */
 
 #endif /* USE_API */
 
