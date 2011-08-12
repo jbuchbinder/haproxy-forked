@@ -76,6 +76,7 @@
 #define STAT_API_CMD_POOL_CONTENTS "pool.contents" /* list of all servers */
 #define STAT_API_CMD_POOL_ADD "pool.add" /* add server */
 #define STAT_API_CMD_POOL_REMOVE "pool.remove" /* remove server */
+#define STAT_API_CMD_POOL_WEIGHT "pool.weight" /* set weight */
 
 #endif /* USE_API */
 

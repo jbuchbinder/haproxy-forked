@@ -59,6 +59,12 @@ mode.
 
 Takes two arguments, proxy and server. Gets status for server.
 
+"pool.weight" command
+---------------------
+
+Takes three arguments: proxy, server and weight. Sets weight for a
+server in a proxy.
+
 "pool.contents" command
 -----------------------
 

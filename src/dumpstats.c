@@ -700,6 +700,101 @@ static int api_call(struct stream_interface *si, struct chunk *msg)
 
 		return chunk_printf(msg, STAT_API_RETURN_OK);
 	}
+	if (memcmp(si->applet.ctx.stats.api_action, STAT_API_CMD_POOL_WEIGHT, strlen(STAT_API_CMD_POOL_WEIGHT)) == 0) {
+		/* pool.weight */
+
+		struct proxy *px;
+		struct server *sv;
+
+		char *orig = strdup(si->applet.ctx.stats.api_data);
+		char *p, *server_name, *proxy_name, *weight_raw;
+		
+		server_name = malloc(strlen(orig));
+		proxy_name = malloc(strlen(orig));
+		weight_raw = malloc(strlen(orig));
+
+		p = strtok(orig, "/");
+		int count = 0;
+		while (p) {
+			switch (count) {
+				case 0:
+					proxy_name = strdup(p);
+					break;
+				case 1:
+					server_name = strdup(p);
+					break;
+				case 2:
+					weight_raw = strdup(p);
+					break;
+			}
+			p = strtok(NULL, "/");
+			count++;
+		}
+
+		if (!get_backend_server(proxy_name, server_name, &px, &sv)) {
+			if (server_name) free(server_name);
+			if (proxy_name) free(proxy_name);
+			if (weight_raw) free(weight_raw);
+			if (orig) free(orig);
+			return chunk_printf(msg, STAT_API_RETURN_SERVERNOTFOUND);
+		}
+
+		if (!weight_raw) {
+			if (server_name) free(server_name);
+			if (proxy_name) free(proxy_name);
+			if (weight_raw) free(weight_raw);
+			if (orig) free(orig);
+			return chunk_printf(msg, STAT_API_RETURN_SERVERNOTFOUND);
+		}
+
+		sv->iweight = sv->uweight = atoi(weight_raw);
+		int w = atoi(weight_raw);
+		if (strchr(weight_raw, '%') != NULL) {
+			if (w < 0 || w > 100) {
+				if (server_name) free(server_name);
+				if (proxy_name) free(proxy_name);
+				if (weight_raw) free(weight_raw);
+				if (orig) free(orig);
+				return chunk_printf(msg, json_return_status(false, 1, "Relative weight can only be set between 0 and 100% inclusive."));
+			}
+			w = sv->iweight * w / 100;
+		} else {
+			if (w < 0 || w > 256) {
+				if (server_name) free(server_name);
+				if (proxy_name) free(proxy_name);
+				if (weight_raw) free(weight_raw);
+				if (orig) free(orig);
+				return chunk_printf(msg, json_return_status(false, 1, "Absolute weight can only be between 0 and 256 inclusive."));
+			}
+		}
+
+		if (w && w != sv->iweight && !(px->lbprm.algo & BE_LB_PROP_DYN)) {
+			if (server_name) free(server_name);
+			if (proxy_name) free(proxy_name);
+			if (weight_raw) free(weight_raw);
+			if (orig) free(orig);
+			return chunk_printf(msg, json_return_status(false, 1, "Backend is using a static LB algorithm and only accepts weights '0%' and '100%'."));
+		}
+
+		sv->uweight = w;
+
+		if (px->lbprm.algo & BE_LB_PROP_DYN) {
+			if ((sv->state & SRV_WARMINGUP) && (px->lbprm.algo & BE_LB_PROP_DYN))
+				sv->eweight = (BE_WEIGHT_SCALE * (now.tv_sec - sv->last_change) + sv->slowstart - 1) / sv->slowstart;
+			else
+				sv->eweight = BE_WEIGHT_SCALE;
+			sv->eweight *= sv->uweight;
+		} else {
+			sv->eweight = sv->uweight;
+		}
+
+		if (server_name) free(server_name);
+		if (proxy_name) free(proxy_name);
+		if (weight_raw) free(weight_raw);
+		if (orig) free(orig);
+
+		return chunk_printf(msg, STAT_API_RETURN_OK);
+	}
 	if (memcmp(si->applet.ctx.stats.api_action, STAT_API_CMD_POOL_REMOVE, strlen(STAT_API_CMD_POOL_REMOVE)) == 0) {
 		/* pool.remove */
 
